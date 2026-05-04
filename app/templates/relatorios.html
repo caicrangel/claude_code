@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Relatórios — {{ settings.EMPRESA_NOME }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="page">
+  <h1>Relatórios — {{ settings.EMPRESA_NOME }}</h1>
+  <div class="meta">
+    Período {{ settings.PERIODO_INICIO|data_curta }} → {{ settings.PERIODO_FIM|data_curta }}
+    · {{ dias_decorridos|inteiro }}/{{ dias_periodo|inteiro }} dias decorridos
+    · gerado em {{ now|data }}
+  </div>
+
+  <section class="kpi-grid">
+    <div class="kpi-card"><span>Consumo no período</span><strong>{{ consumo|litros }}</strong>
+      <small>{{ pct|pct }} da cota de {{ cota|litros_curto }}</small></div>
+    <div class="kpi-card"><span>Valor total</span><strong>{{ valor_total|moeda }}</strong>
+      <small>{{ qtd_total|inteiro }} nota(s)</small></div>
+    <div class="kpi-card"><span>Preço médio</span><strong>{{ preco_medio_litro|moeda }}/L</strong>
+      <small>ticket médio {{ ticket_medio|moeda }}</small></div>
+    <div class="kpi-card"><span>Ritmo diário</span><strong>{{ taxa_diaria|litros_curto }}/dia</strong>
+      <small>média até hoje</small></div>
+  </section>
+
+  <section class="projecao status-{{ projecao_status }}">
+    <h2>Projeção de fechamento</h2>
+    <p>Mantido o ritmo atual de <strong>{{ taxa_diaria|litros_curto }}/dia</strong>,
+       o consumo total no período seria de
+       <strong>{{ projecao_total|litros_curto }}</strong>
+       (<strong>{{ '%.2f'|format(projecao_pct)|replace('.', ',') }}%</strong> da cota).
+       {% if projecao_status == 'crit' %}
+         <span class="tag tag-crit">⚠ Estouro previsto</span>
+         {% if data_estouro %}A cota será atingida em torno de <strong>{{ data_estouro|data_curta }}</strong>
+            ({{ dias_ate_estourar|round(0,'floor')|int|inteiro }} dias).{% endif %}
+       {% else %}
+         <span class="tag tag-ok">✓ Dentro da cota</span>
+       {% endif %}
+    </p>
+  </section>
+
+  <section class="charts">
+    <div class="chart-card">
+      <h2>Top fornecedores (litros)</h2>
+      <canvas id="chartFornecedores"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Consumo mensal</h2>
+      <canvas id="chartMensal"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Distribuição por NCM</h2>
+      <canvas id="chartNCM"></canvas>
+    </div>
+  </section>
+
+  <section>
+    <h2>Compras por fornecedor</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fornecedor</th><th>CNPJ</th>
+          <th class="num">Notas</th><th class="num">Litros</th>
+          <th class="num">Valor</th><th class="num">R$/L</th>
+          <th class="num">Participação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in fornecedores %}
+          {% set pct_f = (f.litros / consumo * 100) if consumo else 0 %}
+          {% set rs_litro = (f.valor / f.litros) if f.litros else 0 %}
+          <tr>
+            <td>{{ f.emitente_nome or '—' }}</td>
+            <td class="mono">{{ f.emitente_cnpj or '—' }}</td>
+            <td class="num">{{ f.qtd|inteiro }}</td>
+            <td class="num">{{ f.litros|litros }}</td>
+            <td class="num">{{ f.valor|moeda }}</td>
+            <td class="num">{{ rs_litro|moeda }}</td>
+            <td class="num">{{ pct_f|pct }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted">Sem dados no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Consumo mensal</h2>
+    <table>
+      <thead><tr><th>Mês</th><th class="num">Notas</th><th class="num">Litros</th><th class="num">Valor</th><th class="num">R$/L</th></tr></thead>
+      <tbody>
+        {% for m in mensal %}
+          {% set rs_l = (m.valor / m.litros) if m.litros else 0 %}
+          <tr>
+            <td>{{ m.mes.strftime('%m/%Y') if m.mes else '—' }}</td>
+            <td class="num">{{ m.qtd|inteiro }}</td>
+            <td class="num">{{ m.litros|litros }}</td>
+            <td class="num">{{ m.valor|moeda }}</td>
+            <td class="num">{{ rs_l|moeda }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">Sem dados no período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<script id="chartdata" type="application/json">
+{{ {
+  "fornecedores": fornecedores_chart,
+  "mensal": mensal_chart,
+  "ncm": ncm_chart
+} | tojson }}
+</script>
+<script>
+(function(){
+  const data = JSON.parse(document.getElementById('chartdata').textContent);
+
+  function themeColors(){
+    const s = getComputedStyle(document.documentElement);
+    return {
+      text:   s.getPropertyValue('--text').trim(),
+      muted:  s.getPropertyValue('--muted').trim(),
+      grid:   s.getPropertyValue('--grid').trim(),
+      accent: s.getPropertyValue('--accent').trim(),
+      ok:     s.getPropertyValue('--ok').trim(),
+      warn:   s.getPropertyValue('--warn').trim(),
+      crit:   s.getPropertyValue('--crit').trim(),
+    };
+  }
+  function fmtBR(v, casas){
+    return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: casas||0, maximumFractionDigits: casas||0});
+  }
+  function fmtRS(v){ return 'R$ ' + fmtBR(v, 2); }
+
+  let chartF, chartM, chartN;
+  function build(){
+    const c = themeColors();
+    Chart.defaults.color = c.text;
+    Chart.defaults.borderColor = c.grid;
+
+    const palette = [c.accent, c.ok, c.warn, c.crit, '#a78bfa', '#f472b6', '#22d3ee', '#facc15', '#34d399', '#fb7185'];
+
+    [chartF, chartM, chartN].forEach(ch => ch && ch.destroy());
+
+    chartF = new Chart(document.getElementById('chartFornecedores'), {
+      type: 'bar',
+      data: {
+        labels: data.fornecedores.labels,
+        datasets: [{
+          label: 'Litros',
+          data: data.fornecedores.litros,
+          backgroundColor: c.accent,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          legend: {display: false},
+          tooltip: {callbacks: {label: ctx => fmtBR(ctx.parsed.x, 0) + ' L'}},
+        },
+        scales: {
+          x: {ticks: {callback: v => fmtBR(v, 0)}, grid: {color: c.grid}},
+          y: {grid: {display: false}},
+        },
+      }
+    });
+
+    chartM = new Chart(document.getElementById('chartMensal'), {
+      type: 'line',
+      data: {
+        labels: data.mensal.labels,
+        datasets: [
+          {label: 'Litros', data: data.mensal.litros, yAxisID: 'y',
+           borderColor: c.accent, backgroundColor: c.accent+'33', tension: 0.25, fill: true},
+          {label: 'Valor (R$)', data: data.mensal.valor, yAxisID: 'y2',
+           borderColor: c.warn, backgroundColor: 'transparent', tension: 0.25, borderDash: [4,4]},
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' +
+            (ctx.datasetIndex === 1 ? fmtRS(ctx.parsed.y) : fmtBR(ctx.parsed.y, 0) + ' L')}},
+        },
+        scales: {
+          y:  {position: 'left',  ticks: {callback: v => fmtBR(v, 0) + ' L'}, grid: {color: c.grid}},
+          y2: {position: 'right', ticks: {callback: v => fmtRS(v)}, grid: {display: false}},
+          x:  {grid: {color: c.grid}},
+        },
+      },
+    });
+
+    chartN = new Chart(document.getElementById('chartNCM'), {
+      type: 'doughnut',
+      data: {
+        labels: data.ncm.labels,
+        datasets: [{data: data.ncm.litros, backgroundColor: palette}],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          tooltip: {callbacks: {label: ctx => ctx.label + ': ' + fmtBR(ctx.parsed, 0) + ' L'}},
+        },
+      },
+    });
+  }
+  build();
+  document.addEventListener('themechange', build);
+})();
+</script>
+{% endblock %}

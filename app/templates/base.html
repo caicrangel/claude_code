@@ -5,20 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Cota Diesel{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  <script>
+    // aplica tema antes de pintar pra evitar flash
+    (function(){
+      var t = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  {% block head %}{% endblock %}
 </head>
 <body>
   <header class="topbar">
     <span class="brand">⛽ Cota Diesel</span>
     {% if request.session.get('auth') %}
       <nav>
-        <a href="/dashboard">Dashboard</a>
+        <a href="/dashboard">Visão geral</a>
+        <a href="/relatorios">Relatórios</a>
+        <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+          <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
+        </button>
         <a href="/logout">Sair</a>
+      </nav>
+    {% else %}
+      <nav>
+        <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
+          <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
+        </button>
       </nav>
     {% endif %}
   </header>
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    function toggleTheme(){
+      var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      var nxt = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', nxt);
+      localStorage.setItem('theme', nxt);
+      document.dispatchEvent(new CustomEvent('themechange', {detail: nxt}));
+    }
+  </script>
 </body>
 </html>

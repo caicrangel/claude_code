@@ -3,54 +3,56 @@
 {% block content %}
 <div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#painel" hx-target="#painel" hx-swap="outerHTML">
   <h1>{{ settings.EMPRESA_NOME }}</h1>
-  <div class="meta">CNPJ {{ settings.cnpj_limpo }} · período {{ settings.PERIODO_INICIO }} → {{ settings.PERIODO_FIM }}</div>
-  <p class="muted">Atualizado em {{ now.strftime('%d/%m/%Y %H:%M UTC') }} · auto-refresh a cada 60s</p>
+  <div class="meta">
+    CNPJ {{ settings.cnpj_limpo }}
+    · período {{ settings.PERIODO_INICIO|data_curta }} → {{ settings.PERIODO_FIM|data_curta }}
+  </div>
+  <p class="muted">Atualizado em {{ now|data }} (horário local) · auto-refresh a cada 60s</p>
 
   <div id="painel" class="status-{{ status }}">
     <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
 
     <div class="kpi">
-      <div><strong>{{ '%.0f'|format(consumo) }}</strong><span>L consumidos</span></div>
-      <div><strong>{{ '%.0f'|format(cota) }}</strong><span>L cota</span></div>
-      <div><strong>{{ '%.2f'|format(pct) }}%</strong><span>uso</span></div>
-      <div><strong>{{ '%.0f'|format(restante) }}</strong><span>L restantes</span></div>
+      <div><strong>{{ consumo|litros }}</strong><span>consumido</span></div>
+      <div><strong>{{ cota|litros_curto }}</strong><span>cota</span></div>
+      <div><strong>{{ pct|pct }}</strong><span>uso</span></div>
+      <div><strong>{{ restante|litros }}</strong><span>restante</span></div>
     </div>
 
     <form class="sync-form"
           hx-post="/sync"
-          hx-target="#sync-msg"
-          hx-swap="innerHTML"
+          hx-swap="none"
           hx-on::after-request="
             const r = JSON.parse(event.detail.xhr.response);
             const el = document.getElementById('sync-msg');
             if (r.ok) {
               el.className = 'sync-msg ok';
-              el.textContent = `Sincronizado: ${r.novas} nota(s) novas, ${r.consumo.toFixed(0)} L (${r.pct.toFixed(2)}%)`;
+              el.textContent = `Sincronizado: ${r.novas} nova(s), fonte ${r.fonte || 'sefaz'}`;
               setTimeout(() => htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'}), 800);
             } else if (r.throttle) {
               el.className = 'sync-msg warn';
-              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a SEFAZ novamente.`;
+              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a fonte novamente.`;
             } else {
               el.className = 'sync-msg err';
               el.textContent = 'Erro: ' + (r.erro || 'falha desconhecida');
             }">
-      <button type="submit">Sincronizar com SEFAZ agora</button>
+      <button type="submit">Sincronizar agora</button>
       <span id="sync-msg" class="sync-msg"></span>
     </form>
 
-    <h2>Notas registradas ({{ total_notas }}{% if total_notas > notas|length %} — exibindo {{ notas|length }} mais recentes{% endif %})</h2>
+    <h2>Notas registradas ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>
       <thead>
-        <tr><th>Emissão</th><th>Chave</th><th>Emitente</th><th>Litros</th><th>Valor</th></tr>
+        <tr><th>Emissão</th><th>Chave</th><th>Emitente</th><th class="num">Litros</th><th class="num">Valor</th></tr>
       </thead>
       <tbody>
         {% for n in notas %}
           <tr>
-            <td>{{ n.data_emissao.strftime('%d/%m/%Y %H:%M') if n.data_emissao else '—' }}</td>
+            <td>{{ n.data_emissao|data }}</td>
             <td class="mono">{{ n.chave }}</td>
             <td>{{ n.emitente_nome }}</td>
-            <td>{{ '%.3f'|format(n.litros_diesel) }}</td>
-            <td>R$ {{ '%.2f'|format(n.valor_total) }}</td>
+            <td class="num">{{ n.litros_diesel|litros }}</td>
+            <td class="num">{{ n.valor_total|moeda }}</td>
           </tr>
         {% else %}
           <tr><td colspan="5" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>

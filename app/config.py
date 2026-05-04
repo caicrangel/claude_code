@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     POLL_INTERVAL: int = 900
     MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)
 
+    # Localização
+    TZ: str = "America/Sao_Paulo"
+
     # SMTP
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
