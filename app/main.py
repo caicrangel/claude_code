@@ -66,10 +66,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     consumo = litros_consumidos(db)
     pct = percentual(consumo)
     cota = Decimal(str(settings.COTA_LITROS))
+    total_notas = db.query(NotaFiscal).count()
     notas = (
         db.query(NotaFiscal)
         .order_by(NotaFiscal.data_emissao.desc().nullslast())
-        .limit(50)
+        .limit(200)
         .all()
     )
     status = "ok" if pct < 70 else ("warn" if pct < 95 else "crit")
@@ -84,6 +85,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "restante": cota - consumo,
             "status": status,
             "notas": notas,
+            "total_notas": total_notas,
             "now": datetime.utcnow(),
         },
     )

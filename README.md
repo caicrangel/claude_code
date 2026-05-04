@@ -20,9 +20,22 @@ o `.env`, suba outro `docker compose` em outra porta.
 4. **Dashboard** com login mostra barra de progresso, KPIs e últimas notas.
    Auto-refresh a cada 60s + botão de sincronização manual.
 
+## Fontes de dados
+
+O app suporta duas fontes — escolhida por configuração:
+
+1. **SIEG (recomendada)** — se sua contabilidade já usa o cofre SIEG, basta
+   preencher `SIEG_API_KEY` no `.env`. A SIEG faz manifestação de ciência
+   automaticamente, guarda o XML completo e não tem janela de 90 dias.
+   Não precisa de certificado.
+2. **SEFAZ direto (fallback)** — usado quando `SIEG_API_KEY` está vazio.
+   Consulta `NFeDistribuicaoDFe` com certificado A1 (.pfx). Limitações:
+   só serve documentos dos últimos ~90 dias e muitas vezes devolve apenas
+   resumo (`resNFe`) sem manifestação de ciência prévia.
+
 ## Pré-requisitos
 
-- **Certificado digital A1 (.pfx)** da empresa.
+- **`SIEG_API_KEY`** OU **certificado digital A1 (.pfx)** da empresa.
 - **Docker** + **Docker Compose**.
 
 ## Setup

@@ -38,7 +38,7 @@
       <span id="sync-msg" class="sync-msg"></span>
     </form>
 
-    <h2>Últimas notas ({{ notas|length }})</h2>
+    <h2>Notas registradas ({{ total_notas }}{% if total_notas > notas|length %} — exibindo {{ notas|length }} mais recentes{% endif %})</h2>
     <table>
       <thead>
         <tr><th>Emissão</th><th>Chave</th><th>Emitente</th><th>Litros</th><th>Valor</th></tr>

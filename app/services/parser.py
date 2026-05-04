@@ -9,12 +9,11 @@ from lxml import etree
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
-# NCMs comuns p/ óleo diesel:
-#   2710.19.21 - óleo diesel
-#   2710.19.22 - óleo diesel marítimo
-# Filtro permissivo: 27101921 / 27101922 / 27101931 (B-S10 conforme tabela TIPI)
-NCM_DIESEL_PREFIXES = ("27101921", "27101922", "27101931")
-DIESEL_KEYWORDS = ("DIESEL", "S10", "S500")
+# Aceita qualquer NCM da família 2710.19 (óleos diesel e congêneres) +
+# fallback por palavra-chave na descrição. Mantenha permissivo: a cota é
+# crítica e é melhor falso-positivo que falso-negativo.
+NCM_DIESEL_PREFIXES = ("271019",)
+DIESEL_KEYWORDS = ("DIESEL", "S10", "S500", "B S10", "B-S10")
 
 
 @dataclass

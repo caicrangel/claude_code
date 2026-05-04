@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     SEFAZ_AMBIENTE: int = 1
     SEFAZ_UF: str = "SP"
 
+    # SIEG (https://api.sieg.com) — fonte alternativa via cofre da contabilidade.
+    # Quando preenchido, é usado como fonte primária no lugar do SEFAZ direto.
+    SIEG_API_KEY: str = ""
+
     POLL_INTERVAL: int = 900
     MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)
 
