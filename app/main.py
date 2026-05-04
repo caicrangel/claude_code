@@ -14,9 +14,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import format as fmt
 from .auth import check_credentials, require_login
 from .config import settings
-from .database import Base, engine, get_db
+from .database import get_db, run_migrations
 from .models import NotaFiscal
-from .services.ingest import TooSoonError, processar
+from .services.ingest import TooSoonError, manifestar_chave, processar
 from .services.quota import litros_consumidos, percentual
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    run_migrations()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -70,7 +70,13 @@ def _kpis(db: Session) -> dict:
     pct = percentual(consumo)
     restante = cota - consumo
     status = "ok" if pct < 70 else ("warn" if pct < 95 else "crit")
-    return {"consumo": consumo, "cota": cota, "pct": pct, "restante": restante, "status": status}
+    pendentes = db.query(NotaFiscal).filter(
+        NotaFiscal.is_resumo.is_(True),
+        NotaFiscal.cancelada.is_(False),
+    ).count()
+    canceladas = db.query(NotaFiscal).filter(NotaFiscal.cancelada.is_(True)).count()
+    return {"consumo": consumo, "cota": cota, "pct": pct, "restante": restante,
+            "status": status, "pendentes": pendentes, "canceladas": canceladas}
 
 
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(require_login)])
@@ -202,4 +208,15 @@ def sync_now(db: Session = Depends(get_db)):
         return {"ok": False, "throttle": True, "segundos_restantes": ex.segundos_restantes,
                 "erro": str(ex)}
     except Exception as ex:  # noqa: BLE001
+        return {"ok": False, "erro": str(ex)}
+
+
+@app.post("/manifestar/{chave}", dependencies=[Depends(require_login)])
+def manifestar(chave: str, db: Session = Depends(get_db)):
+    if len(chave) != 44 or not chave.isdigit():
+        return {"ok": False, "erro": "chave inválida"}
+    try:
+        return {"ok": True, **manifestar_chave(db, chave)}
+    except Exception as ex:  # noqa: BLE001
+        log.exception("Falha manifestação manual")
         return {"ok": False, "erro": str(ex)}

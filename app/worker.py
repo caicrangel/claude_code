@@ -5,7 +5,7 @@ import time
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .config import settings
-from .database import Base, SessionLocal, engine
+from .database import SessionLocal, run_migrations
 from .services.ingest import TooSoonError, processar
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -26,7 +26,7 @@ def tick():
 
 
 def main():
-    Base.metadata.create_all(bind=engine)
+    run_migrations()
     sched = BlockingScheduler(timezone="UTC")
     sched.add_job(tick, "interval", seconds=settings.POLL_INTERVAL)
     log.info("Worker iniciado, intervalo=%ss", settings.POLL_INTERVAL)

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Numeric, Text, UniqueConstraint,
+    Boolean, Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint,
 )
 
 from .database import Base
@@ -12,6 +12,7 @@ class NotaFiscal(Base):
 
     id = Column(Integer, primary_key=True)
     chave = Column(String(44), nullable=False, unique=True, index=True)
+    nsu = Column(String(20), index=True)
     numero = Column(String(20))
     serie = Column(String(5))
     emitente_cnpj = Column(String(14))
@@ -22,7 +23,12 @@ class NotaFiscal(Base):
     ncm = Column(String(8))
     cfop = Column(String(4))
     xml = Column(Text)
+    # Status:
+    is_resumo = Column(Boolean, default=False, nullable=False)     # só recebemos resNFe
+    manifestada = Column(Boolean, default=False, nullable=False)   # evento 210210 OK
+    cancelada = Column(Boolean, default=False, nullable=False)     # evento 110111 OK
     criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Alerta(Base):

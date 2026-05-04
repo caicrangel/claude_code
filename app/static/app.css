@@ -167,3 +167,17 @@ th {
 }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 0.78rem; }
+
+.status-line { display: flex; gap: 0.6rem; align-items: center; color: var(--muted);
+               font-size: 0.9rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.status-line strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.status-line strong.warn { color: var(--warn); }
+.status-line .sep { color: var(--border); }
+
+.row-pendente td { background: rgba(245, 158, 11, 0.05); }
+.row-cancelada td { background: rgba(239, 68, 68, 0.05); text-decoration: line-through;
+                    text-decoration-color: var(--crit); }
+.btn-mini { font-size: 0.75rem; padding: 0.25rem 0.55rem; border-radius: 5px;
+            background: var(--panel-soft); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+.btn-mini:hover { border-color: var(--accent); color: var(--accent); }
+.tag.tag-warn { background: rgba(245, 158, 11, 0.15); color: var(--warn); }

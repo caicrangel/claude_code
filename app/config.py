@@ -27,9 +27,12 @@ class Settings(BaseSettings):
     SEFAZ_AMBIENTE: int = 1
     SEFAZ_UF: str = "SP"
 
-    # SIEG (https://api.sieg.com) — fonte alternativa via cofre da contabilidade.
-    # Quando preenchido, é usado como fonte primária no lugar do SEFAZ direto.
-    SIEG_API_KEY: str = ""
+    # Manifestação de ciência (evento 210210). Quando true, ao receber um
+    # resumo (resNFe), o app envia automaticamente o evento e em seguida
+    # consulta a NFe completa (consChNFe). Tem efeito jurídico: dá ciência
+    # da operação ao fisco. Recomendado, mas off por padrão.
+    MANIFESTAR_AUTO: bool = False
+    EMITENTE_CONSULTANTE_NOME: str = ""   # opcional, para logs/eventos
 
     POLL_INTERVAL: int = 900
     MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)

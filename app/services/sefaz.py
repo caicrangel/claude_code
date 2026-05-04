@@ -1,12 +1,18 @@
 """
-Cliente NFeDistribuicaoDFe (SEFAZ-AN).
+Clientes dos webservices SEFAZ-AN usados pela automação.
 
-Este serviço entrega ao destinatário (CNPJ consultante) os documentos
-emitidos contra ele, via NSU sequencial. Requer certificado A1 (.pfx).
+- NFeDistribuicaoDFe: entrega ao destinatário (CNPJ consultante) os
+  documentos emitidos contra ele. Modos:
+    distNSU      → varredura sequencial (polling)
+    consNSU      → consulta um NSU específico
+    consChNFe    → consulta uma NFe pela chave (devolve completa após
+                   manifestação de ciência)
+- NFeRecepcaoEvento4: recepção de eventos da NFe, incluindo a
+  manifestação do destinatário (210210 — ciência da operação).
 
-Doc oficial: https://www.nfe.fazenda.gov.br/portal/listaConteudo.aspx?tipoConteudo=Wak0FwB7dKs=
-WSDL prod: https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx
-WSDL hom : https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx
+Ambos exigem certificado A1 (mTLS).
+
+Doc: https://www.nfe.fazenda.gov.br/portal/listaConteudo.aspx?tipoConteudo=Wak0FwB7dKs=
 """
 from __future__ import annotations
 
@@ -17,22 +23,26 @@ import ssl
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import requests
 from cryptography.hazmat.primitives.serialization import (
-    pkcs12, BestAvailableEncryption, NoEncryption, Encoding, PrivateFormat,
+    Encoding, NoEncryption, PrivateFormat, pkcs12,
 )
 from lxml import etree
 
 log = logging.getLogger(__name__)
 
-WS_URL = {
+WS_DISTRIBUICAO = {
     1: "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx",
     2: "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx",
 }
+WS_RECEPCAO_EVENTO = {
+    1: "https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx",
+    2: "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx",
+}
 
-SOAP_ACTION = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse"
+ACTION_DIST = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse"
+ACTION_EVENTO = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento"
 
 UF_COD = {
     "AC": "12", "AL": "27", "AM": "13", "AP": "16", "BA": "29", "CE": "23",
@@ -48,13 +58,20 @@ NS_NFE = "http://www.portalfiscal.inf.br/nfe"
 @dataclass
 class DocDFe:
     nsu: str
-    schema: str
-    xml: bytes        # XML decodificado (NFe ou resumo)
+    schema: str   # ex: "procNFe_v4.00", "resNFe_v1.01", "procEventoNFe_v1.00"
+    xml: bytes
     chave: str | None
 
 
+@dataclass
+class RetornoEvento:
+    cstat: str
+    motivo: str
+    xml: bytes
+
+
 class CertAdapter(requests.adapters.HTTPAdapter):
-    """Adapter que carrega cert/key PEM em memória pra mTLS."""
+    """Adapter de mTLS — carrega cert/chave PEM em memória."""
 
     def __init__(self, cert_pem: bytes, key_pem: bytes, *args, **kwargs):
         self._cert_pem = cert_pem
@@ -63,20 +80,19 @@ class CertAdapter(requests.adapters.HTTPAdapter):
 
     def init_poolmanager(self, *args, **kwargs):
         ctx = ssl.create_default_context()
-        # requests não aceita cert/key em memória diretamente, então gravamos
-        # arquivos temporários com permissão restrita.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as cf, \
              tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as kf:
             cf.write(self._cert_pem)
             kf.write(self._key_pem)
-            self._cert_file = cf.name
-            self._key_file = kf.name
-        ctx.load_cert_chain(self._cert_file, self._key_file)
+            cert_file = cf.name
+            key_file = kf.name
+        ctx.load_cert_chain(cert_file, key_file)
         kwargs["ssl_context"] = ctx
         return super().init_poolmanager(*args, **kwargs)
 
 
-def _load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
+def load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
+    """Lê um .pfx e devolve (cert_chain_pem, key_pem)."""
     data = Path(pfx_path).read_bytes()
     key, cert, extra = pkcs12.load_key_and_certificates(data, password.encode())
     cert_pem = cert.public_bytes(Encoding.PEM)
@@ -91,8 +107,8 @@ def _load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
     return cert_pem, key_pem
 
 
-def _build_envelope(uf_cod: str, ambiente: int, cnpj: str, ult_nsu: str) -> bytes:
-    body = f"""<?xml version="1.0" encoding="UTF-8"?>
+def _envelope_dist(uf_cod: str, ambiente: int, cnpj: str, body_inner: str) -> bytes:
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
     <nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
@@ -101,70 +117,120 @@ def _build_envelope(uf_cod: str, ambiente: int, cnpj: str, ult_nsu: str) -> byte
           <tpAmb>{ambiente}</tpAmb>
           <cUFAutor>{uf_cod}</cUFAutor>
           <CNPJ>{cnpj}</CNPJ>
-          <distNSU><ultNSU>{ult_nsu.zfill(15)}</ultNSU></distNSU>
+          {body_inner}
         </distDFeInt>
       </nfeDadosMsg>
     </nfeDistDFeInteresse>
   </soap12:Body>
-</soap12:Envelope>"""
-    return body.encode("utf-8")
+</soap12:Envelope>""".encode("utf-8")
+
+
+def _envelope_evento(env_evento_xml: bytes) -> bytes:
+    inner = env_evento_xml.decode("utf-8")
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">{inner}</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>""".encode("utf-8")
+
+
+def _extrair_chave(xml: bytes) -> str | None:
+    try:
+        root = etree.fromstring(xml)
+    except Exception:  # noqa: BLE001
+        return None
+    for el in root.iter("{%s}infNFe" % NS_NFE):
+        ident = el.get("Id", "")
+        if ident.startswith("NFe"):
+            return ident[3:]
+    for el in root.iter("{%s}chNFe" % NS_NFE):
+        return (el.text or "").strip() or None
+    for el in root.iter("{%s}infEvento" % NS_NFE):
+        ch = el.findtext("{%s}chNFe" % NS_NFE)
+        if ch:
+            return ch.strip()
+    return None
 
 
 class SefazClient:
     def __init__(self, cert_path: str, cert_password: str, ambiente: int, uf: str):
         self.ambiente = ambiente
-        self.uf_cod = UF_COD[uf.upper()]
-        self.url = WS_URL[ambiente]
-        cert_pem, key_pem = _load_pfx(cert_path, cert_password)
+        self.uf = uf.upper()
+        self.uf_cod = UF_COD[self.uf]
+        self.cert_pem, self.key_pem = load_pfx(cert_path, cert_password)
         self.session = requests.Session()
-        self.session.mount("https://", CertAdapter(cert_pem, key_pem))
+        self.session.mount("https://", CertAdapter(self.cert_pem, self.key_pem))
 
-    def consultar(self, cnpj: str, ult_nsu: str = "0") -> tuple[str, str, list[DocDFe]]:
-        """Retorna (cStat, ultNSU_recebido, docs)."""
-        envelope = _build_envelope(self.uf_cod, self.ambiente, cnpj, ult_nsu)
-        headers = {
-            "Content-Type": "application/soap+xml; charset=utf-8",
-            "SOAPAction": SOAP_ACTION,
-        }
-        r = self.session.post(self.url, data=envelope, headers=headers, timeout=60)
+    # ------- DistribuicaoDFe -------
+
+    def consultar_nsu(self, cnpj: str, ult_nsu: str = "0") -> tuple[str, str, list[DocDFe]]:
+        body_inner = f"<distNSU><ultNSU>{ult_nsu.zfill(15)}</ultNSU></distNSU>"
+        return self._consultar(cnpj, body_inner)
+
+    def consultar_chave(self, cnpj: str, chave: str) -> tuple[str, str, list[DocDFe]]:
+        body_inner = f"<consChNFe><chNFe>{chave}</chNFe></consChNFe>"
+        return self._consultar(cnpj, body_inner)
+
+    def _consultar(self, cnpj: str, body_inner: str) -> tuple[str, str, list[DocDFe]]:
+        envelope = _envelope_dist(self.uf_cod, self.ambiente, cnpj, body_inner)
+        r = self.session.post(
+            WS_DISTRIBUICAO[self.ambiente],
+            data=envelope,
+            headers={
+                "Content-Type": "application/soap+xml; charset=utf-8",
+                "SOAPAction": ACTION_DIST,
+            },
+            timeout=60,
+        )
         r.raise_for_status()
-        return self._parse_response(r.content)
-
-    def _parse_response(self, body: bytes) -> tuple[str, str, list[DocDFe]]:
-        root = etree.fromstring(body)
-        ns = {
-            "soap": "http://www.w3.org/2003/05/soap-envelope",
-            "nfe": NS_NFE,
-        }
-        ret = root.find(".//nfe:retDistDFeInt", ns)
-        if ret is None:
-            raise RuntimeError(f"Resposta inesperada do SEFAZ: {body[:500]!r}")
-        cstat = (ret.findtext("nfe:cStat", default="", namespaces=ns) or "").strip()
-        ult_nsu = (ret.findtext("nfe:ultNSU", default="0", namespaces=ns) or "0").strip()
-        docs: list[DocDFe] = []
-        loteEl = ret.find("nfe:loteDistDFeInt", ns)
-        if loteEl is not None:
-            for doc in loteEl.findall("nfe:docZip", ns):
-                nsu = doc.get("NSU", "")
-                schema = doc.get("schema", "")
-                raw = base64.b64decode(doc.text or "")
-                xml = gzip.decompress(raw)
-                chave = self._extrair_chave(xml)
-                docs.append(DocDFe(nsu=nsu, schema=schema, xml=xml, chave=chave))
-        return cstat, ult_nsu, docs
+        return self._parse_distribuicao(r.content)
 
     @staticmethod
-    def _extrair_chave(xml: bytes) -> str | None:
-        try:
-            root = etree.fromstring(xml)
-        except Exception:
-            return None
-        # NFe completa: //infNFe/@Id = "NFe<chave>"
-        for el in root.iter("{%s}infNFe" % NS_NFE):
-            ident = el.get("Id", "")
-            if ident.startswith("NFe"):
-                return ident[3:]
-        # Resumo (resNFe): chNFe
-        for el in root.iter("{%s}chNFe" % NS_NFE):
-            return (el.text or "").strip() or None
-        return None
+    def _parse_distribuicao(body: bytes) -> tuple[str, str, list[DocDFe]]:
+        root = etree.fromstring(body)
+        ns = {"nfe": NS_NFE}
+        ret = root.find(".//nfe:retDistDFeInt", ns)
+        if ret is None:
+            raise RuntimeError(f"Resposta inesperada SEFAZ: {body[:500]!r}")
+        cstat = (ret.findtext("nfe:cStat", "", ns) or "").strip()
+        ult_nsu = (ret.findtext("nfe:ultNSU", "0", ns) or "0").strip()
+        docs: list[DocDFe] = []
+        lote = ret.find("nfe:loteDistDFeInt", ns)
+        if lote is not None:
+            for d in lote.findall("nfe:docZip", ns):
+                nsu = d.get("NSU", "")
+                schema = d.get("schema", "")
+                raw = base64.b64decode(d.text or "")
+                xml = gzip.decompress(raw)
+                docs.append(DocDFe(nsu=nsu, schema=schema, xml=xml, chave=_extrair_chave(xml)))
+        return cstat, ult_nsu, docs
+
+    # ------- RecepcaoEvento4 -------
+
+    def enviar_evento(self, env_evento_xml: bytes) -> RetornoEvento:
+        envelope = _envelope_evento(env_evento_xml)
+        r = self.session.post(
+            WS_RECEPCAO_EVENTO[self.ambiente],
+            data=envelope,
+            headers={
+                "Content-Type": "application/soap+xml; charset=utf-8",
+                "SOAPAction": ACTION_EVENTO,
+            },
+            timeout=60,
+        )
+        r.raise_for_status()
+        root = etree.fromstring(r.content)
+        ns = {"nfe": NS_NFE}
+        ret = root.find(".//nfe:retEnvEvento", ns)
+        if ret is None:
+            raise RuntimeError(f"Resposta inesperada RecepcaoEvento: {r.content[:500]!r}")
+        # cStat de envelope; cada infEvento tem o seu cStat individual
+        cstat = (ret.findtext("nfe:cStat", "", ns) or "").strip()
+        motivo = (ret.findtext("nfe:xMotivo", "", ns) or "").strip()
+        # Se houver retEvento individual, prefere o cStat de lá
+        ret_individual = ret.find("nfe:retEvento/nfe:infEvento", ns)
+        if ret_individual is not None:
+            cstat = (ret_individual.findtext("nfe:cStat", cstat, ns) or cstat).strip()
+            motivo = (ret_individual.findtext("nfe:xMotivo", motivo, ns) or motivo).strip()
+        return RetornoEvento(cstat=cstat, motivo=motivo, xml=r.content)

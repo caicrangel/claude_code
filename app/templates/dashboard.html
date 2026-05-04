@@ -19,6 +19,14 @@
       <div><strong>{{ restante|litros }}</strong><span>restante</span></div>
     </div>
 
+    <div class="status-line">
+      <span>Notas registradas: <strong>{{ total_notas|inteiro }}</strong></span>
+      <span class="sep">·</span>
+      <span>Resumos pendentes: <strong class="{% if pendentes %}warn{% endif %}">{{ pendentes|inteiro }}</strong></span>
+      <span class="sep">·</span>
+      <span>Canceladas: <strong>{{ canceladas|inteiro }}</strong></span>
+    </div>
+
     <form class="sync-form"
           hx-post="/sync"
           hx-swap="none"
@@ -27,35 +35,59 @@
             const el = document.getElementById('sync-msg');
             if (r.ok) {
               el.className = 'sync-msg ok';
-              el.textContent = `Sincronizado: ${r.novas} nova(s), fonte ${r.fonte || 'sefaz'}`;
+              const c = r.contadores || {};
+              const partes = Object.entries(c).map(([k,v]) => `${k}: ${v}`).join(', ') || 'sem novidades';
+              el.textContent = 'Sincronizado SEFAZ — ' + partes;
               setTimeout(() => htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'}), 800);
             } else if (r.throttle) {
               el.className = 'sync-msg warn';
-              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a fonte novamente.`;
+              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a SEFAZ novamente.`;
             } else {
               el.className = 'sync-msg err';
               el.textContent = 'Erro: ' + (r.erro || 'falha desconhecida');
             }">
-      <button type="submit">Sincronizar agora</button>
+      <button type="submit">Sincronizar com SEFAZ agora</button>
       <span id="sync-msg" class="sync-msg"></span>
     </form>
 
     <h2>Notas registradas ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>
       <thead>
-        <tr><th>Emissão</th><th>Chave</th><th>Emitente</th><th class="num">Litros</th><th class="num">Valor</th></tr>
+        <tr>
+          <th>Emissão</th><th>Chave</th><th>Emitente</th>
+          <th class="num">Litros</th><th class="num">Valor</th>
+          <th>Status</th><th></th>
+        </tr>
       </thead>
       <tbody>
         {% for n in notas %}
-          <tr>
+          <tr class="{% if n.cancelada %}row-cancelada{% elif n.is_resumo %}row-pendente{% endif %}">
             <td>{{ n.data_emissao|data }}</td>
             <td class="mono">{{ n.chave }}</td>
             <td>{{ n.emitente_nome }}</td>
             <td class="num">{{ n.litros_diesel|litros }}</td>
             <td class="num">{{ n.valor_total|moeda }}</td>
+            <td>
+              {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
+              {% elif n.is_resumo %}<span class="tag tag-warn">resumo</span>
+              {% elif n.manifestada %}<span class="tag tag-ok">manifestada</span>
+              {% else %}<span class="tag tag-ok">completa</span>{% endif %}
+            </td>
+            <td>
+              {% if n.is_resumo and not n.cancelada %}
+                <button type="button" class="btn-mini"
+                        hx-post="/manifestar/{{ n.chave }}"
+                        hx-swap="none"
+                        hx-on::after-request="
+                          const r = JSON.parse(event.detail.xhr.response);
+                          alert(r.ok ? ('Manifestação enviada: ' + (r.motivo || r.cstat || 'OK')) : ('Erro: ' + (r.erro || 'falha')));
+                          if (r.ok) htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'});
+                        ">Manifestar</button>
+              {% endif %}
+            </td>
           </tr>
         {% else %}
-          <tr><td colspan="5" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
+          <tr><td colspan="7" class="muted">Nenhuma nota registrada ainda.</td></tr>
         {% endfor %}
       </tbody>
     </table>

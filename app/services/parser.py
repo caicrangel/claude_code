@@ -1,4 +1,10 @@
-"""Parsing de NFe pra extrair itens de combustível (diesel)."""
+"""Parsing de documentos vindos do NFeDistribuicaoDFe.
+
+Três tipos de docZip podem chegar:
+  - procNFe / NFe        → NFe completa (parse_nfe)
+  - resNFe               → resumo (parse_resumo) - sem itens, só cabeçalho
+  - procEventoNFe        → evento (parse_evento) - cancelamento etc.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -107,3 +113,71 @@ def parse_nfe(xml: bytes) -> NFeParsed | None:
         data_emissao=data_emissao, valor_total=valor_total,
         itens_diesel=itens,
     )
+
+
+@dataclass
+class ResumoParsed:
+    chave: str
+    numero: str
+    serie: str
+    emit_cnpj: str
+    emit_nome: str
+    data_emissao: datetime | None
+    valor_total: Decimal
+
+
+def parse_resumo(xml: bytes) -> ResumoParsed | None:
+    """Parse de um resNFe (resumo da NFe)."""
+    root = etree.fromstring(xml)
+    # resNFe é o root
+    if not root.tag.endswith("resNFe"):
+        return None
+    chave = (root.findtext("nfe:chNFe", "", NS) or "").strip()
+    if not chave:
+        return None
+    emit_cnpj = (root.findtext("nfe:CNPJ", "", NS) or "").strip()
+    emit_nome = (root.findtext("nfe:xNome", "", NS) or "").strip()
+    dh = (root.findtext("nfe:dhEmi", "", NS) or "").strip()
+    try:
+        data_emissao = datetime.fromisoformat(dh) if dh else None
+    except ValueError:
+        data_emissao = None
+    valor = Decimal(root.findtext("nfe:vNF", "0", NS) or "0")
+    # número/série não estão no resumo padrão; deduzir da chave
+    numero = chave[25:34]
+    serie = chave[22:25].lstrip("0") or "0"
+    return ResumoParsed(
+        chave=chave, numero=numero, serie=serie,
+        emit_cnpj=emit_cnpj, emit_nome=emit_nome,
+        data_emissao=data_emissao, valor_total=valor,
+    )
+
+
+@dataclass
+class EventoParsed:
+    chave: str
+    tp_evento: str       # "110111" cancelamento, "110110" CCe, "210200/210/220/240" manifestação
+    n_seq: int
+    cstat: str | None    # quando dentro de procEventoNFe há retEvento
+
+    @property
+    def is_cancelamento(self) -> bool:
+        return self.tp_evento == "110111"
+
+
+def parse_evento(xml: bytes) -> EventoParsed | None:
+    """Parse de um procEventoNFe."""
+    root = etree.fromstring(xml)
+    inf = root.find(".//nfe:infEvento", NS)
+    if inf is None:
+        return None
+    chave = (inf.findtext("nfe:chNFe", "", NS) or "").strip()
+    tp = (inf.findtext("nfe:tpEvento", "", NS) or "").strip()
+    n_seq_raw = inf.findtext("nfe:nSeqEvento", "1", NS) or "1"
+    try:
+        n_seq = int(n_seq_raw)
+    except ValueError:
+        n_seq = 1
+    ret_inf = root.find(".//nfe:retEvento//nfe:infEvento", NS)
+    cstat = ret_inf.findtext("nfe:cStat", "", NS) if ret_inf is not None else None
+    return EventoParsed(chave=chave, tp_evento=tp, n_seq=n_seq, cstat=cstat)

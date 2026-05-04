@@ -1,30 +1,50 @@
-"""Polling fonte (SIEG ou SEFAZ) → parsing → persistência → cota."""
+"""Polling SEFAZ → parsing → persistência → cota.
+
+Fluxo por docZip recebido:
+  - procNFe / NFe completa       → grava/atualiza NotaFiscal (litros)
+  - resNFe (resumo)              → grava como pendente (is_resumo=True)
+                                   se MANIFESTAR_AUTO=true: manifesta + consChNFe
+  - procEventoNFe (evento)       → aplica:
+        110111 (Cancelamento)    → marca cancelada=True
+        210210 (Ciência)         → marca manifestada=True
+"""
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import NotaFiscal, get_state, set_state
-from .parser import parse_nfe
+from .eventos import manifestar_ciencia
+from .parser import parse_evento, parse_nfe, parse_resumo
 from .quota import avaliar_e_alertar
-from .sefaz import SefazClient
-from .sieg import SiegClient
+from .sefaz import DocDFe, SefazClient
 
 log = logging.getLogger(__name__)
 NSU_KEY = "ultimo_nsu"
 LAST_CALL_KEY = "ultima_consulta_em"
 
-_sefaz: SefazClient | None = None
-_sieg: SiegClient | None = None
+_client: SefazClient | None = None
 
 
 class TooSoonError(RuntimeError):
     def __init__(self, segundos_restantes: int):
-        super().__init__(f"Aguarde {segundos_restantes}s antes de consultar novamente")
+        super().__init__(f"Aguarde {segundos_restantes}s antes de consultar a SEFAZ novamente")
         self.segundos_restantes = segundos_restantes
+
+
+def get_client() -> SefazClient:
+    global _client
+    if _client is None:
+        _client = SefazClient(
+            cert_path=settings.CERT_PATH,
+            cert_password=settings.CERT_PASSWORD,
+            ambiente=settings.SEFAZ_AMBIENTE,
+            uf=settings.SEFAZ_UF,
+        )
+    return _client
 
 
 def _segundos_desde_ultima(db: Session) -> int | None:
@@ -45,116 +65,183 @@ def _check_throttle(db: Session, force: bool) -> None:
     set_state(db, LAST_CALL_KEY, datetime.now(timezone.utc).isoformat())
 
 
-def _registrar_xml(db: Session, xml: bytes) -> tuple[bool, str]:
-    """Tenta gravar uma NFe a partir de um XML. Retorna (gravada, motivo)."""
-    parsed = parse_nfe(xml)
+# ---------- aplicação de cada tipo ----------
+
+def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
+    parsed = parse_nfe(doc.xml)
     if parsed is None:
-        return False, "nao-eh-nfe-completa"
-    if not parsed.itens_diesel:
-        return False, "sem-itens-diesel"
-    if db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first():
-        return False, "ja-existe"
-    db.add(NotaFiscal(
-        chave=parsed.chave,
-        numero=parsed.numero,
-        serie=parsed.serie,
-        emitente_cnpj=parsed.emit_cnpj,
-        emitente_nome=parsed.emit_nome,
-        data_emissao=parsed.data_emissao,
-        valor_total=parsed.valor_total,
-        litros_diesel=parsed.litros_diesel,
-        ncm=parsed.itens_diesel[0].ncm,
-        cfop=parsed.itens_diesel[0].cfop,
-        xml=xml.decode("utf-8", errors="replace"),
-    ))
-    return True, "ok"
+        return "nfe-invalida"
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
+    if nf is None:
+        if not parsed.itens_diesel:
+            return "sem-itens-diesel"
+        nf = NotaFiscal(chave=parsed.chave)
+        db.add(nf)
+    elif not nf.is_resumo and not parsed.itens_diesel:
+        return "ja-completa-sem-diesel"
+
+    nf.nsu = doc.nsu
+    nf.numero = parsed.numero
+    nf.serie = parsed.serie
+    nf.emitente_cnpj = parsed.emit_cnpj
+    nf.emitente_nome = parsed.emit_nome
+    nf.data_emissao = parsed.data_emissao
+    nf.valor_total = parsed.valor_total
+    nf.litros_diesel = parsed.litros_diesel
+    if parsed.itens_diesel:
+        nf.ncm = parsed.itens_diesel[0].ncm
+        nf.cfop = parsed.itens_diesel[0].cfop
+    nf.xml = doc.xml.decode("utf-8", errors="replace")
+    nf.is_resumo = False
+    return "nfe-completa"
 
 
-# ---------- SIEG ----------
+def _aplicar_resumo(db: Session, doc: DocDFe) -> str:
+    parsed = parse_resumo(doc.xml)
+    if parsed is None:
+        return "resumo-invalido"
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
+    if nf is None:
+        nf = NotaFiscal(chave=parsed.chave, is_resumo=True)
+        db.add(nf)
+    elif not nf.is_resumo:
+        return "ja-completa"
+    nf.nsu = doc.nsu
+    nf.numero = parsed.numero
+    nf.serie = parsed.serie
+    nf.emitente_cnpj = parsed.emit_cnpj
+    nf.emitente_nome = parsed.emit_nome
+    nf.data_emissao = parsed.data_emissao
+    nf.valor_total = parsed.valor_total
+    return "resumo"
 
-def _get_sieg() -> SiegClient:
-    global _sieg
-    if _sieg is None:
-        _sieg = SiegClient(settings.SIEG_API_KEY)
-    return _sieg
+
+def _aplicar_evento(db: Session, doc: DocDFe) -> str:
+    parsed = parse_evento(doc.xml)
+    if parsed is None or not parsed.chave:
+        return "evento-invalido"
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
+    if nf is None:
+        # evento de NFe que ainda não temos — ignora; se relevante virá depois
+        return "evento-sem-nf"
+    if parsed.is_cancelamento:
+        nf.cancelada = True
+        return "cancelamento"
+    if parsed.tp_evento == "210210":
+        nf.manifestada = True
+        return "manifestacao-confirmada"
+    return f"evento-{parsed.tp_evento}"
 
 
-def _processar_sieg(db: Session) -> dict:
-    cnpj = settings.cnpj_limpo
-    if not cnpj:
-        raise RuntimeError("EMPRESA_CNPJ não configurado")
-    client = _get_sieg()
-    # Busca o período inteiro até hoje (ou fim do período se já passou)
-    hoje = date.today()
-    data_fim = min(settings.PERIODO_FIM, hoje)
-    log.info("SIEG: baixando NFe %s..%s p/ %s", settings.PERIODO_INICIO, data_fim, cnpj)
-    xmls = client.baixar_nfe_destinatario(cnpj, settings.PERIODO_INICIO, data_fim)
-    novas = 0
-    motivos: dict[str, int] = {}
-    for xml in xmls:
-        gravada, motivo = _registrar_xml(db, xml)
-        if gravada:
-            novas += 1
-        else:
-            motivos[motivo] = motivos.get(motivo, 0) + 1
-    if novas:
+def _aplicar(db: Session, doc: DocDFe) -> str:
+    schema = (doc.schema or "").lower()
+    if schema.startswith("procnfe") or schema.startswith("nfe"):
+        return _aplicar_nfe(db, doc)
+    if schema.startswith("resnfe"):
+        return _aplicar_resumo(db, doc)
+    if schema.startswith("proceventonfe") or schema.startswith("evento"):
+        return _aplicar_evento(db, doc)
+    # tenta deduzir pelo conteúdo
+    if b"<resNFe" in doc.xml:
+        return _aplicar_resumo(db, doc)
+    if b"infNFe" in doc.xml:
+        return _aplicar_nfe(db, doc)
+    if b"infEvento" in doc.xml:
+        return _aplicar_evento(db, doc)
+    return f"schema-desconhecido:{schema}"
+
+
+# ---------- manifestação automática ----------
+
+def _manifestar_pendentes(db: Session, client: SefazClient) -> dict:
+    """Para cada nota só com resumo (e não manifestada), envia 210210
+    e em seguida consChNFe pra puxar a NFe completa."""
+    pendentes = (
+        db.query(NotaFiscal)
+        .filter(NotaFiscal.is_resumo.is_(True),
+                NotaFiscal.manifestada.is_(False),
+                NotaFiscal.cancelada.is_(False))
+        .limit(50)
+        .all()
+    )
+    out = {"tentadas": 0, "ok": 0, "completas": 0, "falhas": 0}
+    for nf in pendentes:
+        out["tentadas"] += 1
+        try:
+            ret = manifestar_ciencia(client, nf.chave)
+        except Exception:  # noqa: BLE001
+            log.exception("Falha manifestando %s", nf.chave)
+            out["falhas"] += 1
+            continue
+        if not ret["ok"]:
+            out["falhas"] += 1
+            continue
+        nf.manifestada = True
+        out["ok"] += 1
+        # tenta puxar NFe completa imediatamente
+        try:
+            _, _, docs = client.consultar_chave(settings.cnpj_limpo, nf.chave)
+            for d in docs:
+                if _aplicar(db, d) == "nfe-completa":
+                    out["completas"] += 1
+        except Exception:  # noqa: BLE001
+            log.exception("Falha puxando NFe completa após manifestação %s", nf.chave)
         db.commit()
-    log.info("SIEG: %d xmls baixados, %d gravados, motivos=%s", len(xmls), novas, motivos)
-    return {"fonte": "sieg", "baixados": len(xmls), "novas": novas, "motivos": motivos}
+    return out
 
 
-# ---------- SEFAZ direto ----------
+# ---------- entrada principal ----------
 
-def _get_sefaz() -> SefazClient:
-    global _sefaz
-    if _sefaz is None:
-        _sefaz = SefazClient(
-            cert_path=settings.CERT_PATH,
-            cert_password=settings.CERT_PASSWORD,
-            ambiente=settings.SEFAZ_AMBIENTE,
-            uf=settings.SEFAZ_UF,
-        )
-    return _sefaz
-
-
-def _processar_sefaz(db: Session) -> dict:
+def processar(db: Session, *, force: bool = False) -> dict:
+    if not settings.cnpj_limpo:
+        raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
+    _check_throttle(db, force)
+    client = get_client()
     cnpj = settings.cnpj_limpo
-    if not cnpj:
-        raise RuntimeError("EMPRESA_CNPJ não configurado")
-    client = _get_sefaz()
-    novas = 0
     ult_nsu = get_state(db, NSU_KEY, "0")
 
+    contadores: dict[str, int] = {}
     for _ in range(20):
         try:
-            cstat, ult_recebido, docs = client.consultar(cnpj, ult_nsu)
+            cstat, ult_recebido, docs = client.consultar_nsu(cnpj, ult_nsu)
         except Exception as e:  # noqa: BLE001
             log.exception("Erro consultando SEFAZ: %s", e)
             break
         log.info("SEFAZ cStat=%s ultNSU=%s docs=%d", cstat, ult_recebido, len(docs))
         for doc in docs:
-            if not doc.chave:
-                continue
-            gravada, _ = _registrar_xml(db, doc.xml)
-            if gravada:
-                novas += 1
+            r = _aplicar(db, doc)
+            contadores[r] = contadores.get(r, 0) + 1
         if ult_recebido and ult_recebido != ult_nsu:
             ult_nsu = ult_recebido
             set_state(db, NSU_KEY, ult_nsu)
         if cstat == "137" or not docs:
             break
-    if novas:
-        db.commit()
-    return {"fonte": "sefaz", "novas": novas}
+    db.commit()
 
+    manifestacao = None
+    if settings.MANIFESTAR_AUTO:
+        manifestacao = _manifestar_pendentes(db, client)
 
-# ---------- Entrada pública ----------
-
-def processar(db: Session, *, force: bool = False) -> dict:
-    _check_throttle(db, force)
-    if settings.SIEG_API_KEY:
-        resumo = _processar_sieg(db)
-    else:
-        resumo = _processar_sefaz(db)
-    resumo.update(avaliar_e_alertar(db))
+    resumo = avaliar_e_alertar(db)
+    resumo["fonte"] = "sefaz"
+    resumo["contadores"] = contadores
+    if manifestacao is not None:
+        resumo["manifestacao"] = manifestacao
     return resumo
+
+
+def manifestar_chave(db: Session, chave: str) -> dict:
+    """Disparo manual de manifestação para uma chave específica."""
+    client = get_client()
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == chave).first()
+    ret = manifestar_ciencia(client, chave)
+    if ret["ok"] and nf is not None:
+        nf.manifestada = True
+        try:
+            _, _, docs = client.consultar_chave(settings.cnpj_limpo, chave)
+            for d in docs:
+                _aplicar(db, d)
+        except Exception:  # noqa: BLE001
+            log.exception("Falha em consChNFe após manifestação")
+        db.commit()
+    return ret

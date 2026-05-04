@@ -20,6 +20,8 @@ def litros_consumidos(db: Session) -> Decimal:
         .filter(
             NotaFiscal.data_emissao >= settings.PERIODO_INICIO,
             NotaFiscal.data_emissao <= settings.PERIODO_FIM,
+            NotaFiscal.is_resumo.is_(False),
+            NotaFiscal.cancelada.is_(False),
         )
         .scalar()
     )
