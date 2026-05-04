@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,16 @@ from .sefaz import SefazClient
 
 log = logging.getLogger(__name__)
 NSU_KEY = "ultimo_nsu"
+LAST_CALL_KEY = "ultima_consulta_em"
 _client: SefazClient | None = None
+
+
+class TooSoonError(RuntimeError):
+    """Lançada quando uma nova consulta SEFAZ é solicitada antes do intervalo mínimo."""
+
+    def __init__(self, segundos_restantes: int):
+        super().__init__(f"Aguarde {segundos_restantes}s antes de consultar a SEFAZ novamente")
+        self.segundos_restantes = segundos_restantes
 
 
 def get_client() -> SefazClient:
@@ -28,9 +38,26 @@ def get_client() -> SefazClient:
     return _client
 
 
-def processar(db: Session) -> dict:
+def _segundos_desde_ultima(db: Session) -> int | None:
+    raw = get_state(db, LAST_CALL_KEY, "")
+    if not raw:
+        return None
+    try:
+        last = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return int((datetime.now(timezone.utc) - last).total_seconds())
+
+
+def processar(db: Session, *, force: bool = False) -> dict:
     if not settings.cnpj_limpo:
         raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
+
+    desde = _segundos_desde_ultima(db)
+    if not force and desde is not None and desde < settings.MIN_SEFAZ_INTERVAL:
+        raise TooSoonError(settings.MIN_SEFAZ_INTERVAL - desde)
+
+    set_state(db, LAST_CALL_KEY, datetime.now(timezone.utc).isoformat())
 
     client = get_client()
     novas = 0

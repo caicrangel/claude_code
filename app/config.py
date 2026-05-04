@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     SEFAZ_UF: str = "SP"
 
     POLL_INTERVAL: int = 900
+    MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)
 
     # SMTP
     SMTP_HOST: str = ""

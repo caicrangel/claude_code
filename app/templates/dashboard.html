@@ -16,8 +16,26 @@
       <div><strong>{{ '%.0f'|format(restante) }}</strong><span>L restantes</span></div>
     </div>
 
-    <form hx-post="/sync" hx-swap="none" class="sync-form">
+    <form class="sync-form"
+          hx-post="/sync"
+          hx-target="#sync-msg"
+          hx-swap="innerHTML"
+          hx-on::after-request="
+            const r = JSON.parse(event.detail.xhr.response);
+            const el = document.getElementById('sync-msg');
+            if (r.ok) {
+              el.className = 'sync-msg ok';
+              el.textContent = `Sincronizado: ${r.novas} nota(s) novas, ${r.consumo.toFixed(0)} L (${r.pct.toFixed(2)}%)`;
+              setTimeout(() => htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'}), 800);
+            } else if (r.throttle) {
+              el.className = 'sync-msg warn';
+              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a SEFAZ novamente.`;
+            } else {
+              el.className = 'sync-msg err';
+              el.textContent = 'Erro: ' + (r.erro || 'falha desconhecida');
+            }">
       <button type="submit">Sincronizar com SEFAZ agora</button>
+      <span id="sync-msg" class="sync-msg"></span>
     </form>
 
     <h2>Últimas notas ({{ notas|length }})</h2>

@@ -6,7 +6,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .config import settings
 from .database import Base, SessionLocal, engine
-from .services.ingest import processar
+from .services.ingest import TooSoonError, processar
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("worker")
@@ -17,6 +17,8 @@ def tick():
     try:
         log.info("Tick: consultando SEFAZ p/ %s (%s)", settings.EMPRESA_NOME, settings.cnpj_limpo)
         log.info("Resultado: %s", processar(db))
+    except TooSoonError as e:
+        log.info("Tick ignorado (throttle): %s", e)
     except Exception:  # noqa: BLE001
         log.exception("Erro no tick")
     finally:

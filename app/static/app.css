@@ -39,7 +39,11 @@ button:hover { filter: brightness(1.1); }
 .kpi strong { display: block; font-size: 1.5rem; }
 .kpi span { color: var(--muted); font-size: 0.85rem; }
 
-.sync-form { margin: 1rem 0 2rem; }
+.sync-form { margin: 1rem 0 2rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.sync-msg { font-size: 0.9rem; padding: 0.4rem 0.7rem; border-radius: 6px; }
+.sync-msg.ok   { background: #14532d; color: #bbf7d0; }
+.sync-msg.warn { background: #713f12; color: #fde68a; }
+.sync-msg.err  { background: #7f1d1d; color: #fecaca; }
 
 table { width: 100%; border-collapse: collapse; background: var(--panel);
         border-radius: 8px; overflow: hidden; }

@@ -14,7 +14,7 @@ from .auth import check_credentials, require_login
 from .config import settings
 from .database import Base, engine, get_db
 from .models import NotaFiscal
-from .services.ingest import processar
+from .services.ingest import TooSoonError, processar
 from .services.quota import litros_consumidos, percentual
 
 logging.basicConfig(level=logging.INFO)
@@ -93,5 +93,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 def sync_now(db: Session = Depends(get_db)):
     try:
         return {"ok": True, **processar(db)}
+    except TooSoonError as ex:
+        return {"ok": False, "throttle": True, "segundos_restantes": ex.segundos_restantes,
+                "erro": str(ex)}
     except Exception as ex:  # noqa: BLE001
         return {"ok": False, "erro": str(ex)}
