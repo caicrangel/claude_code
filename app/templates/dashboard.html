@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#cards" hx-target="#cards" hx-swap="outerHTML">
+  <h1>Cotas em acompanhamento</h1>
+  <p class="muted">Atualizado em {{ now.strftime('%d/%m/%Y %H:%M UTC') }} · auto-refresh a cada 60s</p>
+
+  <div id="cards" class="cards">
+    {% for c in cards %}
+      {% set pct = c.pct %}
+      {% set status = 'ok' if pct < 70 else ('warn' if pct < 95 else 'crit') %}
+      <a class="card status-{{ status }}" href="/empresas/{{ c.empresa.id }}">
+        <h2>{{ c.empresa.nome }}</h2>
+        <div class="cnpj">CNPJ {{ c.empresa.cnpj }}</div>
+        <div class="periodo">{{ c.empresa.periodo_inicio }} → {{ c.empresa.periodo_fim }}</div>
+        <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
+        <div class="numbers">
+          <div><strong>{{ '%.0f'|format(c.consumo) }}</strong><span>L consumidos</span></div>
+          <div><strong>{{ '%.0f'|format(c.empresa.cota_litros) }}</strong><span>L cota</span></div>
+          <div><strong>{{ '%.2f'|format(pct) }}%</strong><span>uso</span></div>
+          <div><strong>{{ '%.0f'|format(c.restante) }}</strong><span>L restantes</span></div>
+        </div>
+      </a>
+    {% else %}
+      <div class="empty">Nenhuma empresa cadastrada. {% if user.is_admin %}<a href="/admin">Cadastrar</a>{% endif %}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

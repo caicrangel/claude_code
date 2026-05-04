@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+certs/
+*.pfx
+*.pem
+.venv/
+.idea/
+.vscode/

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Cota Diesel{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="/dashboard" class="brand">⛽ Cota Diesel</a>
+    {% if user %}
+      <nav>
+        <a href="/dashboard">Dashboard</a>
+        {% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}
+        <span class="user">{{ user.email }}</span>
+        <a href="/logout">Sair</a>
+      </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

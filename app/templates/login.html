@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="login-card">
+  <h1>Acessar painel</h1>
+  {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+  <form method="post" action="/login">
+    <label>Email <input type="email" name="email" required autofocus></label>
+    <label>Senha <input type="password" name="senha" required></label>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}
