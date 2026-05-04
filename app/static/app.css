@@ -11,11 +11,11 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .topbar { display: flex; align-items: center; gap: 1.5rem;
           padding: 1rem 2rem; background: #0b1220; border-bottom: 1px solid #1f2937; }
-.topbar .brand { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.topbar .brand { font-weight: 700; font-size: 1.1rem; }
 .topbar nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
-.topbar .user { color: var(--muted); font-size: 0.9rem; }
-main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+main { padding: 2rem; max-width: 1100px; margin: 0 auto; }
 .muted { color: var(--muted); }
+.meta { color: var(--muted); margin-bottom: 0.5rem; }
 
 .login-card { max-width: 360px; margin: 4rem auto; background: var(--panel);
               padding: 2rem; border-radius: 12px; }
@@ -24,45 +24,25 @@ main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
 .login-card label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; }
 .login-card .erro { background: #7f1d1d; padding: 0.6rem; border-radius: 6px; }
 
-input, select, button { font: inherit; padding: 0.55rem 0.7rem; border-radius: 6px;
-                        border: 1px solid #334155; background: #0b1220; color: var(--text); }
+input, button { font: inherit; padding: 0.55rem 0.7rem; border-radius: 6px;
+                border: 1px solid #334155; background: #0b1220; color: var(--text); }
 button { background: var(--accent); color: #0b1220; border: 0; font-weight: 600; cursor: pointer; }
 button:hover { filter: brightness(1.1); }
 
-.cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-.card { display: block; background: var(--panel); padding: 1.2rem; border-radius: 12px;
-        color: var(--text); border-left: 4px solid var(--ok); }
-.card:hover { background: var(--panel2); text-decoration: none; }
-.card.status-warn { border-left-color: var(--warn); }
-.card.status-crit { border-left-color: var(--crit); }
-.card h2 { margin: 0 0 0.2rem; font-size: 1.1rem; }
-.card .cnpj, .card .periodo { color: var(--muted); font-size: 0.85rem; }
-.card .bar { height: 8px; background: #0b1220; border-radius: 4px; margin: 0.8rem 0;
-             overflow: hidden; }
-.card .bar .fill { height: 100%; background: var(--accent); }
-.card.status-warn .fill { background: var(--warn); }
-.card.status-crit .fill { background: var(--crit); }
-.card .numbers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
-.card .numbers div { background: #0b1220; padding: 0.5rem; border-radius: 6px; }
-.card .numbers strong { display: block; font-size: 1.1rem; }
-.card .numbers span { color: var(--muted); font-size: 0.75rem; }
+.bar { height: 14px; background: var(--panel); border-radius: 7px; overflow: hidden; margin: 1rem 0; }
+.bar .fill { height: 100%; background: var(--ok); transition: width 0.4s; }
+.status-warn .fill { background: var(--warn); }
+.status-crit .fill { background: var(--crit); }
 
-.kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0; }
+.kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0 1.5rem; }
 .kpi div { background: var(--panel); padding: 1rem; border-radius: 8px; }
-.kpi strong { display: block; font-size: 1.4rem; }
+.kpi strong { display: block; font-size: 1.5rem; }
 .kpi span { color: var(--muted); font-size: 0.85rem; }
 
-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--panel);
+.sync-form { margin: 1rem 0 2rem; }
+
+table { width: 100%; border-collapse: collapse; background: var(--panel);
         border-radius: 8px; overflow: hidden; }
 th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #0b1220; font-size: 0.9rem; }
 th { background: #0b1220; color: var(--muted); font-weight: 600; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; }
-
-.grid { display: grid; gap: 0.8rem; grid-template-columns: repeat(2, 1fr); margin: 1rem 0; }
-.grid label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
-.grid label.check { flex-direction: row; align-items: center; gap: 0.5rem; }
-.grid button { grid-column: span 2; }
-
-.back { display: inline-block; margin-bottom: 1rem; }
-.empty { padding: 2rem; background: var(--panel); border-radius: 8px; color: var(--muted); }
-section { margin-bottom: 2.5rem; }

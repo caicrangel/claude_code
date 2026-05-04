@@ -1,29 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}{{ settings.EMPRESA_NOME }} — Cota{% endblock %}
 {% block content %}
-<div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#cards" hx-target="#cards" hx-swap="outerHTML">
-  <h1>Cotas em acompanhamento</h1>
+<div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#painel" hx-target="#painel" hx-swap="outerHTML">
+  <h1>{{ settings.EMPRESA_NOME }}</h1>
+  <div class="meta">CNPJ {{ settings.cnpj_limpo }} · período {{ settings.PERIODO_INICIO }} → {{ settings.PERIODO_FIM }}</div>
   <p class="muted">Atualizado em {{ now.strftime('%d/%m/%Y %H:%M UTC') }} · auto-refresh a cada 60s</p>
 
-  <div id="cards" class="cards">
-    {% for c in cards %}
-      {% set pct = c.pct %}
-      {% set status = 'ok' if pct < 70 else ('warn' if pct < 95 else 'crit') %}
-      <a class="card status-{{ status }}" href="/empresas/{{ c.empresa.id }}">
-        <h2>{{ c.empresa.nome }}</h2>
-        <div class="cnpj">CNPJ {{ c.empresa.cnpj }}</div>
-        <div class="periodo">{{ c.empresa.periodo_inicio }} → {{ c.empresa.periodo_fim }}</div>
-        <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
-        <div class="numbers">
-          <div><strong>{{ '%.0f'|format(c.consumo) }}</strong><span>L consumidos</span></div>
-          <div><strong>{{ '%.0f'|format(c.empresa.cota_litros) }}</strong><span>L cota</span></div>
-          <div><strong>{{ '%.2f'|format(pct) }}%</strong><span>uso</span></div>
-          <div><strong>{{ '%.0f'|format(c.restante) }}</strong><span>L restantes</span></div>
-        </div>
-      </a>
-    {% else %}
-      <div class="empty">Nenhuma empresa cadastrada. {% if user.is_admin %}<a href="/admin">Cadastrar</a>{% endif %}</div>
-    {% endfor %}
+  <div id="painel" class="status-{{ status }}">
+    <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
+
+    <div class="kpi">
+      <div><strong>{{ '%.0f'|format(consumo) }}</strong><span>L consumidos</span></div>
+      <div><strong>{{ '%.0f'|format(cota) }}</strong><span>L cota</span></div>
+      <div><strong>{{ '%.2f'|format(pct) }}%</strong><span>uso</span></div>
+      <div><strong>{{ '%.0f'|format(restante) }}</strong><span>L restantes</span></div>
+    </div>
+
+    <form hx-post="/sync" hx-swap="none" class="sync-form">
+      <button type="submit">Sincronizar com SEFAZ agora</button>
+    </form>
+
+    <h2>Últimas notas ({{ notas|length }})</h2>
+    <table>
+      <thead>
+        <tr><th>Emissão</th><th>Chave</th><th>Emitente</th><th>Litros</th><th>Valor</th></tr>
+      </thead>
+      <tbody>
+        {% for n in notas %}
+          <tr>
+            <td>{{ n.data_emissao.strftime('%d/%m/%Y %H:%M') if n.data_emissao else '—' }}</td>
+            <td class="mono">{{ n.chave }}</td>
+            <td>{{ n.emitente_nome }}</td>
+            <td>{{ '%.3f'|format(n.litros_diesel) }}</td>
+            <td>R$ {{ '%.2f'|format(n.valor_total) }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}

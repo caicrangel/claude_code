@@ -1,53 +1,16 @@
-from datetime import datetime, date
+from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Date, Numeric,
-    ForeignKey, UniqueConstraint, Text,
+    Column, Integer, String, DateTime, Numeric, Text, UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
 
 from .database import Base
-
-
-class Empresa(Base):
-    __tablename__ = "empresas"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String(200), nullable=False)
-    cnpj = Column(String(14), nullable=False, unique=True, index=True)
-    cota_litros = Column(Numeric(14, 3), nullable=False, default=0)
-    periodo_inicio = Column(Date, nullable=False)
-    periodo_fim = Column(Date, nullable=False)
-    email_alertas = Column(String(200), nullable=True)
-    ultimo_nsu = Column(String(20), nullable=False, default="000000000000000")
-    ativo = Column(Boolean, default=True)
-    criado_em = Column(DateTime, default=datetime.utcnow)
-
-    notas = relationship("NotaFiscal", back_populates="empresa", cascade="all, delete-orphan")
-    alertas = relationship("Alerta", back_populates="empresa", cascade="all, delete-orphan")
-    usuarios = relationship("Usuario", back_populates="empresa")
-
-
-class Usuario(Base):
-    __tablename__ = "usuarios"
-
-    id = Column(Integer, primary_key=True)
-    email = Column(String(200), nullable=False, unique=True, index=True)
-    senha_hash = Column(String(255), nullable=False)
-    nome = Column(String(200), nullable=True)
-    is_admin = Column(Boolean, default=False)
-    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=True)
-    ativo = Column(Boolean, default=True)
-    criado_em = Column(DateTime, default=datetime.utcnow)
-
-    empresa = relationship("Empresa", back_populates="usuarios")
 
 
 class NotaFiscal(Base):
     __tablename__ = "notas_fiscais"
 
     id = Column(Integer, primary_key=True)
-    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
     chave = Column(String(44), nullable=False, unique=True, index=True)
     numero = Column(String(20))
     serie = Column(String(5))
@@ -61,14 +24,11 @@ class NotaFiscal(Base):
     xml = Column(Text)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
-    empresa = relationship("Empresa", back_populates="notas")
-
 
 class Alerta(Base):
     __tablename__ = "alertas"
 
     id = Column(Integer, primary_key=True)
-    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
     threshold_pct = Column(Integer, nullable=False)
     litros_consumidos = Column(Numeric(14, 3), nullable=False)
     enviado_em = Column(DateTime, default=datetime.utcnow)
@@ -77,7 +37,27 @@ class Alerta(Base):
     periodo_inicio_iso = Column(String(10), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("empresa_id", "threshold_pct", "periodo_inicio_iso", name="uq_alerta_periodo"),
+        UniqueConstraint("threshold_pct", "periodo_inicio_iso", name="uq_alerta_periodo"),
     )
 
-    empresa = relationship("Empresa", back_populates="alertas")
+
+class State(Base):
+    """Tabela chave/valor para estado interno (ex.: ultimo_nsu)."""
+    __tablename__ = "state"
+
+    key = Column(String(50), primary_key=True)
+    value = Column(String(255), nullable=False, default="")
+
+
+def get_state(db, key: str, default: str = "") -> str:
+    row = db.get(State, key)
+    return row.value if row else default
+
+
+def set_state(db, key: str, value: str) -> None:
+    row = db.get(State, key)
+    if row is None:
+        db.add(State(key=key, value=value))
+    else:
+        row.value = value
+    db.commit()

@@ -1,19 +1,18 @@
-"""Orquestra polling SEFAZ → parsing → persistência → cota."""
+"""Polling SEFAZ → parsing → persistência → cota (single-tenant)."""
 from __future__ import annotations
 
 import logging
-from datetime import date
 
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import Empresa, NotaFiscal
+from ..models import NotaFiscal, get_state, set_state
 from .parser import parse_nfe
 from .quota import avaliar_e_alertar
 from .sefaz import SefazClient
 
 log = logging.getLogger(__name__)
-
+NSU_KEY = "ultimo_nsu"
 _client: SefazClient | None = None
 
 
@@ -29,38 +28,31 @@ def get_client() -> SefazClient:
     return _client
 
 
-def processar_empresa(db: Session, empresa: Empresa) -> dict:
-    """Consulta SEFAZ até esgotar lotes, persiste NFe novas e avalia cota."""
+def processar(db: Session) -> dict:
+    if not settings.cnpj_limpo:
+        raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
+
     client = get_client()
     novas = 0
-    iter_count = 0
-    ult_nsu = empresa.ultimo_nsu or "0"
+    ult_nsu = get_state(db, NSU_KEY, "0")
 
-    while iter_count < 20:  # SEFAZ devolve em lotes; iteramos até cStat=137 (nada mais)
-        iter_count += 1
+    for _ in range(20):
         try:
-            cstat, ult_recebido, docs = client.consultar(empresa.cnpj, ult_nsu)
+            cstat, ult_recebido, docs = client.consultar(settings.cnpj_limpo, ult_nsu)
         except Exception as e:  # noqa: BLE001
-            log.exception("Erro consultando SEFAZ p/ %s: %s", empresa.cnpj, e)
+            log.exception("Erro consultando SEFAZ: %s", e)
             break
-        log.info("SEFAZ %s cStat=%s ultNSU=%s docs=%d", empresa.cnpj, cstat, ult_recebido, len(docs))
+        log.info("SEFAZ cStat=%s ultNSU=%s docs=%d", cstat, ult_recebido, len(docs))
 
         for doc in docs:
             if not doc.chave:
                 continue
-            existe = db.query(NotaFiscal).filter(NotaFiscal.chave == doc.chave).first()
-            if existe:
+            if db.query(NotaFiscal).filter(NotaFiscal.chave == doc.chave).first():
                 continue
             parsed = parse_nfe(doc.xml)
-            if parsed is None:
-                # docZip pode ser resumo (resNFe/resEvento) - ignoramos ou poderíamos
-                # acionar consulta completa por chave (consNFe). Para MVP, só persiste
-                # quando temos NFe completa.
+            if parsed is None or not parsed.itens_diesel:
                 continue
-            if not parsed.itens_diesel:
-                continue
-            nf = NotaFiscal(
-                empresa_id=empresa.id,
+            db.add(NotaFiscal(
                 chave=parsed.chave,
                 numero=parsed.numero,
                 serie=parsed.serie,
@@ -69,36 +61,21 @@ def processar_empresa(db: Session, empresa: Empresa) -> dict:
                 data_emissao=parsed.data_emissao,
                 valor_total=parsed.valor_total,
                 litros_diesel=parsed.litros_diesel,
-                ncm=parsed.itens_diesel[0].ncm if parsed.itens_diesel else "",
-                cfop=parsed.itens_diesel[0].cfop if parsed.itens_diesel else "",
+                ncm=parsed.itens_diesel[0].ncm,
+                cfop=parsed.itens_diesel[0].cfop,
                 xml=doc.xml.decode("utf-8", errors="replace"),
-            )
-            db.add(nf)
+            ))
             novas += 1
 
         if ult_recebido and ult_recebido != ult_nsu:
             ult_nsu = ult_recebido
-            empresa.ultimo_nsu = ult_nsu
-            db.commit()
+            set_state(db, NSU_KEY, ult_nsu)
 
-        # cStat 137 = nada mais a retornar; 138 = lote ok mas pode ter mais
         if cstat == "137" or not docs:
             break
 
     if novas:
         db.commit()
-    resumo = avaliar_e_alertar(db, empresa)
+    resumo = avaliar_e_alertar(db)
     resumo["novas"] = novas
     return resumo
-
-
-def processar_todas(db: Session) -> list[dict]:
-    out = []
-    for emp in db.query(Empresa).filter(Empresa.ativo.is_(True)).all():
-        try:
-            r = processar_empresa(db, emp)
-            r["empresa"] = emp.nome
-            out.append(r)
-        except Exception as e:  # noqa: BLE001
-            log.exception("Falha processando empresa %s: %s", emp.cnpj, e)
-    return out

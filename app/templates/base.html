@@ -9,12 +9,10 @@
 </head>
 <body>
   <header class="topbar">
-    <a href="/dashboard" class="brand">⛽ Cota Diesel</a>
-    {% if user %}
+    <span class="brand">⛽ Cota Diesel</span>
+    {% if request.session.get('auth') %}
       <nav>
         <a href="/dashboard">Dashboard</a>
-        {% if user.is_admin %}<a href="/admin">Admin</a>{% endif %}
-        <span class="user">{{ user.email }}</span>
         <a href="/logout">Sair</a>
       </nav>
     {% endif %}

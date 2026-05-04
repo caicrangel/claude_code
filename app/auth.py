@@ -1,33 +1,16 @@
-from fastapi import Request, HTTPException, Depends
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+import secrets
 
-from .database import get_db
-from .models import Usuario
+from fastapi import Request, HTTPException
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from .config import settings
 
 
-def hash_password(p: str) -> str:
-    return pwd_ctx.hash(p)
+def check_credentials(email: str, senha: str) -> bool:
+    ok_email = secrets.compare_digest(email.strip().lower(), settings.AUTH_EMAIL.strip().lower())
+    ok_senha = secrets.compare_digest(senha, settings.AUTH_PASSWORD)
+    return ok_email and ok_senha
 
 
-def verify_password(p: str, h: str) -> bool:
-    return pwd_ctx.verify(p, h)
-
-
-def current_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
-    uid = request.session.get("uid")
-    if not uid:
+def require_login(request: Request) -> None:
+    if not request.session.get("auth"):
         raise HTTPException(status_code=303, headers={"Location": "/login"})
-    user = db.query(Usuario).filter(Usuario.id == uid, Usuario.ativo.is_(True)).first()
-    if not user:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
-    return user
-
-
-def current_user_optional(request: Request, db: Session = Depends(get_db)) -> Usuario | None:
-    uid = request.session.get("uid")
-    if not uid:
-        return None
-    return db.query(Usuario).filter(Usuario.id == uid, Usuario.ativo.is_(True)).first()

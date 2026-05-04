@@ -1,37 +1,35 @@
-# Cota Diesel — Automação de NFe e cota de ICMS
+# Cota Diesel — Automação NFe (single-tenant)
 
-Automação que monitora as notas fiscais de **óleo diesel** emitidas contra um
-ou mais CNPJs, soma a galonagem (litros) consumida e dispara alertas por
-**email** + **dashboard web** quando a empresa se aproxima do teto da cota
-do benefício de ICMS reduzido. Multi-tenant: dá pra acompanhar várias empresas
-no mesmo painel.
+Automação que monitora as notas fiscais de **óleo diesel** emitidas contra
+o CNPJ da empresa, soma a galonagem (litros) consumida no período da cota
+de ICMS reduzido e dispara alertas por **email** + exibe **dashboard web
+com login** quando o consumo se aproxima do teto.
+
+**1 deploy = 1 empresa.** Pra adicionar outra empresa: copie a pasta, ajuste
+o `.env`, suba outro `docker compose` em outra porta.
 
 ## Como funciona
 
-1. **Worker** (`app/worker.py`) consulta o serviço da SEFAZ
-   **NFeDistribuicaoDFe** a cada `POLL_INTERVAL` segundos, usando certificado
-   digital A1 (.pfx) — esse é o webservice oficial pra um destinatário (CNPJ)
-   baixar todas as NFe emitidas contra ele.
-2. As NFe novas são parseadas (`app/services/parser.py`), filtrando itens de
-   diesel pelo NCM (`27101921/22/31`) e palavras-chave no `xProd`.
-3. Os litros são somados por empresa dentro do período da cota. Se o consumo
-   ultrapassar 70%, 85%, 95% ou 100% (configurável em `ALERT_THRESHOLDS`), um
-   email é disparado e o alerta fica registrado pra não duplicar.
-4. **Dashboard** (`app/main.py`) exibe cards por empresa com barra de progresso,
-   consumo, restante e detalhe das últimas notas. Faz auto-refresh a cada 60s.
-5. **Login obrigatório**. Admin cria empresas e usuários; usuário normal só vê
-   a empresa vinculada — pronto pra escalar pra várias empresas.
+1. **Worker** consulta o webservice oficial **NFeDistribuicaoDFe** da SEFAZ a
+   cada `POLL_INTERVAL` segundos, usando certificado digital A1 (.pfx).
+2. As NFe novas são parseadas, filtrando itens de diesel pelo NCM
+   (`27101921/22/31`) e palavras-chave em `xProd`.
+3. Os litros (`qCom`) são somados dentro do período. Se o consumo cruza
+   70/85/95/100% (configurável), um email é disparado e fica registrado
+   pra não duplicar.
+4. **Dashboard** com login mostra barra de progresso, KPIs e últimas notas.
+   Auto-refresh a cada 60s + botão de sincronização manual.
 
 ## Pré-requisitos
 
-- **Certificado digital A1 (.pfx)** da empresa (o mesmo usado pra emitir NFe).
+- **Certificado digital A1 (.pfx)** da empresa.
 - **Docker** + **Docker Compose**.
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# edite .env com SECRET_KEY, credenciais SMTP, senha do certificado, etc.
+# edite .env: SECRET_KEY, AUTH_EMAIL/AUTH_PASSWORD, EMPRESA_*, SMTP_*
 
 mkdir -p certs
 cp /caminho/do/certificado.pfx certs/certificado.pfx
@@ -39,71 +37,72 @@ cp /caminho/do/certificado.pfx certs/certificado.pfx
 docker compose up -d --build
 ```
 
-Acesse `http://localhost:8000` e faça login com `ADMIN_EMAIL` / `ADMIN_PASSWORD`
-(definidos no `.env`). Em **Admin** cadastre a empresa:
+Acesse `http://localhost:8000`, faça login com `AUTH_EMAIL`/`AUTH_PASSWORD`.
 
-- **CNPJ**: 14 dígitos (sem pontuação ok, é normalizado).
-- **Cota (L)**: ex. `1220000` para os 1.220.000 L.
-- **Período início/fim**: ex. `2025-01-01` → `2025-06-30` para o semestre.
-- **Email alertas**: destinatário dos avisos.
+## Adicionar uma nova empresa
 
-O worker faz a primeira consulta logo no start. Você também pode forçar uma
-sincronização clicando em **“Sincronizar com SEFAZ agora”** na página da
-empresa.
+```bash
+cp -r cota-diesel/ cota-diesel-empresa-b/
+cd cota-diesel-empresa-b/
+# edite .env: troque EMPRESA_*, AUTH_*, SECRET_KEY, certificado, e
+# mude a porta no docker-compose.yml (ex.: 8001:8000)
+mkdir certs && cp /caminho/empresa-b.pfx certs/certificado.pfx
+docker compose up -d --build
+```
+
+Cada deploy tem seu Postgres isolado, seu certificado, suas credenciais.
 
 ## Variáveis principais (`.env`)
 
 | Var | Descrição |
 | --- | --- |
+| `EMPRESA_NOME` / `EMPRESA_CNPJ` | Identificação da empresa. CNPJ sem pontuação. |
+| `COTA_LITROS` | Litros totais da cota (ex.: `1220000`). |
+| `PERIODO_INICIO` / `PERIODO_FIM` | Datas do período em ISO (`YYYY-MM-DD`). |
+| `EMAIL_ALERTAS` | Destinatário dos alertas por email. |
+| `AUTH_EMAIL` / `AUTH_PASSWORD` | Login do painel. |
 | `CERT_PATH` / `CERT_PASSWORD` | Certificado A1 (montado em `./certs`). |
 | `SEFAZ_AMBIENTE` | `1` produção, `2` homologação. |
-| `SEFAZ_UF` | UF do consultante (ex. `SP`). Define `cUFAutor` na consulta. |
-| `POLL_INTERVAL` | Intervalo do polling em segundos (default 900 = 15min). |
-| `ALERT_THRESHOLDS` | `70,85,95,100` — porcentagens que disparam email. |
-| `SMTP_*` | Configuração de envio de email. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Usuário admin criado no primeiro start. |
+| `SEFAZ_UF` | UF do consultante (ex.: `SP`). |
+| `POLL_INTERVAL` | Intervalo do polling em segundos (default 900). |
+| `ALERT_THRESHOLDS` | `70,85,95,100` — % que disparam email. |
+| `SMTP_*` | Configuração SMTP. |
 
 ## Estrutura
 
 ```
 app/
-  main.py              # FastAPI + rotas + auth + dashboard
+  main.py              # FastAPI: login + dashboard + /sync
   worker.py            # APScheduler: polling periódico
-  config.py            # Settings via pydantic-settings
-  database.py          # SQLAlchemy engine/session
-  models.py            # Empresa / Usuario / NotaFiscal / Alerta
-  auth.py              # bcrypt + sessão
+  config.py            # Settings (lê .env)
+  database.py
+  models.py            # NotaFiscal / Alerta / State (chave-valor p/ ultNSU)
+  auth.py              # Login simples comparando com .env
   services/
-    sefaz.py           # cliente NFeDistribuicaoDFe (SOAP + mTLS A1)
-    parser.py          # parse XML NFe + filtro diesel
-    quota.py           # soma litros, calcula %, dispara email
+    sefaz.py           # Cliente NFeDistribuicaoDFe (SOAP + mTLS A1)
+    parser.py          # Parse XML NFe + filtro diesel
+    quota.py           # Soma litros, % da cota, dispara alerta
     email.py           # SMTP
-    ingest.py          # orquestração SEFAZ → DB → cota
-  templates/           # Jinja2 (login, dashboard, empresa, admin)
-  static/app.css       # estilos
+    ingest.py          # Orquestração SEFAZ → DB → cota
+  templates/           # login.html, dashboard.html, base.html
+  static/app.css
 docker-compose.yml     # app + worker + postgres
 Dockerfile
 ```
 
-## Notas técnicas / pontos de extensão
+## Pontos de extensão
 
-- **`docZip` resumo**: quando o SEFAZ devolve apenas o resumo (`resNFe`), o MVP
-  ignora. Pra obter a NFe completa, implemente `consNSU` por chave em
-  `services/sefaz.py` ou faça manifestação de ciência antes (evento 210210).
-- **Cotas múltiplas / janelas deslizantes**: hoje a cota é uma só por empresa
-  com início/fim fixo. Pra rolling 6m, evolua o modelo `Empresa` para guardar
-  histórico de cotas/períodos.
+- **Resumo (`resNFe`)**: o MVP só processa NFe completa. Se a SEFAZ devolver
+  apenas resumo, evolua pra acionar manifestação de ciência (evento 210210)
+  e/ou consulta `consNFe` por chave em `services/sefaz.py`.
+- **Eventos de cancelamento**: hoje uma NFe cancelada continua somando.
+  Escute `procEventoNFe` e marque a nota como cancelada.
 - **Filtro de diesel**: ajuste `NCM_DIESEL_PREFIXES` e `DIESEL_KEYWORDS` em
-  `services/parser.py` se a sua operação envolve produtos específicos
-  (B-S10, ARLA não conta, etc.).
-- **Eventos / cancelamento**: o worker grava cada NFe uma vez. Eventos de
-  cancelamento ainda não baixam a litragem — é uma extensão recomendada
-  (escutar `procEventoNFe` e marcar a nota como cancelada).
-- **Escala**: troque o `BlockingScheduler` por Celery + Redis quando o número
-  de empresas crescer.
+  `services/parser.py` se sua operação tiver outras nuances.
 
 ## Segurança
 
-- Sessões com cookie assinado (`itsdangerous`); senhas com `bcrypt`.
-- O `.pfx` fica fora da imagem Docker (montado read-only via volume).
-- `.env` e `certs/` estão no `.gitignore`.
+- Sessão via cookie assinado (`itsdangerous`).
+- Login comparado com `secrets.compare_digest` contra `.env`.
+- Certificado `.pfx` montado read-only via volume; **nunca** vai pra imagem.
+- `.env` e `certs/` no `.gitignore`.
