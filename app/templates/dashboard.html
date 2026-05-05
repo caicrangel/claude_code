@@ -38,29 +38,29 @@
     </div>
 
     <div class="status-line">
-      <span>Notas registradas: <strong>{{ total_notas|inteiro }}</strong></span>
-      <span class="sep">·</span>
-      <span>Resumos pendentes: <strong class="{% if pendentes %}warn{% endif %}">{{ pendentes|inteiro }}</strong></span>
+      <span>Notas de diesel: <strong>{{ total_notas|inteiro }}</strong></span>
       <span class="sep">·</span>
       <span>Canceladas: <strong>{{ canceladas|inteiro }}</strong></span>
     </div>
 
     <p class="muted sync-info">
       Sincronização automática a cada {{ poll_minutos }} minuto(s) via worker em background.
+      Apenas NFe com NCM 2710.19 (óleo diesel) são armazenadas.
+      A manifestação de notas é feita externamente pela contabilidade.
     </p>
 
-    <h2>Notas registradas ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
+    <h2>Notas de diesel ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>
       <thead>
         <tr>
           <th>Emissão</th><th>Chave</th><th>Emitente</th>
           <th class="num">Litros</th><th class="num">Valor</th>
-          <th>Status</th><th></th>
+          <th>Status</th>
         </tr>
       </thead>
       <tbody>
         {% for n in notas %}
-          <tr class="{% if n.cancelada %}row-cancelada{% elif n.is_resumo %}row-pendente{% endif %}">
+          <tr class="{% if n.cancelada %}row-cancelada{% endif %}">
             <td>{{ n.data_emissao|data }}</td>
             <td class="mono">{{ n.chave }}</td>
             <td>{{ n.emitente_nome }}</td>
@@ -68,25 +68,11 @@
             <td class="num">{{ n.valor_total|moeda }}</td>
             <td>
               {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
-              {% elif n.is_resumo %}<span class="tag tag-warn">resumo</span>
-              {% elif n.manifestada %}<span class="tag tag-ok">manifestada</span>
-              {% else %}<span class="tag tag-ok">completa</span>{% endif %}
-            </td>
-            <td>
-              {% if n.is_resumo and not n.cancelada %}
-                <button type="button" class="btn-mini"
-                        hx-post="/manifestar/{{ n.chave }}"
-                        hx-swap="none"
-                        hx-on::after-request="
-                          const r = JSON.parse(event.detail.xhr.response);
-                          alert(r.ok ? ('Manifestação enviada: ' + (r.motivo || r.cstat || 'OK')) : ('Erro: ' + (r.erro || 'falha')));
-                          if (r.ok) htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'});
-                        ">Manifestar</button>
-              {% endif %}
+              {% else %}<span class="tag tag-ok">ativa</span>{% endif %}
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="7" class="muted">Nenhuma nota registrada ainda.</td></tr>
+          <tr><td colspan="6" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
         {% endfor %}
       </tbody>
     </table>

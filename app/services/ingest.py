@@ -4,18 +4,16 @@ Arquitetura:
   - NFeDistribuicaoDFe é NACIONAL: uma única consulta retorna todas as NFe
     emitidas contra o CNPJ do consultante, de qualquer UF emitente.
   - SEFAZ_UF é apenas a UF do consultante (cUFAutor) para roteamento interno.
+  - A MANIFESTAÇÃO de notas é feita pela contabilidade, externamente. Após
+    manifestada, a NFe completa entra na faixa de NSU e é capturada aqui.
 
 Fluxo por docZip recebido:
   - procNFe / NFe completa  → _aplicar_nfe()
         com itens diesel    → grava/atualiza NotaFiscal
-        sem itens diesel    → ignora (ou deleta resumo prévio)
-  - resNFe (resumo)         → _aplicar_resumo()
-        grava como pendente; só sabemos se é diesel após manifestar.
-        Se MANIFESTAR_AUTO=true: manifesta + consChNFe na sequência.
-        Se a NFe completa retornar sem diesel, o resumo é DELETADO.
+        sem itens diesel    → ignora (não polui banco)
+  - resNFe (resumo)         → IGNORADO (sem manifestação no app)
   - procEventoNFe           → _aplicar_evento()
-        110111 (Cancelamento) → marca cancelada=True
-        210210 (Ciência)      → marca manifestada=True
+        110111 (Cancelamento) → marca cancelada=True em nota existente
 """
 from __future__ import annotations
 
@@ -26,8 +24,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import NotaFiscal, get_state, set_state
-from .eventos import manifestar_ciencia
-from .parser import parse_evento, parse_nfe, parse_resumo
+from .parser import parse_evento, parse_nfe
 from .quota import avaliar_e_alertar
 from .sefaz import DocDFe, SefazClient
 
@@ -35,7 +32,7 @@ log = logging.getLogger(__name__)
 
 NSU_KEY = "ultimo_nsu"
 LAST_CALL_KEY = "ultima_consulta_em"
-LAST_OK_KEY = "ultima_consulta_ok_em"  # última consulta bem-sucedida (para UI)
+LAST_OK_KEY = "ultima_consulta_ok_em"
 BLOQUEIO_656_KEY = "bloqueio_656_ate"
 BLOQUEIO_656_SEGUNDOS = 3600  # 1h após cStat=656
 
@@ -118,24 +115,15 @@ def ultima_sincronizacao(db: Session) -> datetime | None:
 # ---------- aplicação de cada tipo de docZip ----------
 
 def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
-    """Processa NFe completa. Se a nota não tem diesel:
-    - se já existe resumo no banco para essa chave → deleta (era falso-positivo)
-    - se não existe → ignora (não polui banco)
-    """
+    """Processa NFe completa. Só armazena se contém itens de diesel."""
     parsed = parse_nfe(doc.xml)
     if parsed is None:
         return "nfe-invalida"
 
-    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
-    tem_diesel = bool(parsed.itens_diesel)
-
-    if not tem_diesel:
-        if nf is not None and nf.is_resumo:
-            db.delete(nf)
-            log.info("Removido resumo %s (NFe completa sem diesel)", parsed.chave)
-            return "resumo-descartado-sem-diesel"
+    if not parsed.itens_diesel:
         return "ignorado-sem-diesel"
 
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
     if nf is None:
         nf = NotaFiscal(chave=parsed.chave)
         db.add(nf)
@@ -152,47 +140,20 @@ def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
     nf.cfop = parsed.itens_diesel[0].cfop
     nf.xml = doc.xml.decode("utf-8", errors="replace")
     nf.is_resumo = False
-    return "nfe-completa"
-
-
-def _aplicar_resumo(db: Session, doc: DocDFe) -> str:
-    """Resumos não têm itens — não dá para saber se é diesel.
-    Armazenamos para manifestação posterior; será deletado se não for diesel.
-    """
-    parsed = parse_resumo(doc.xml)
-    if parsed is None:
-        return "resumo-invalido"
-
-    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
-    if nf is None:
-        nf = NotaFiscal(chave=parsed.chave, is_resumo=True)
-        db.add(nf)
-    elif not nf.is_resumo:
-        return "resumo-ja-completo"
-
-    nf.nsu = doc.nsu
-    nf.numero = parsed.numero
-    nf.serie = parsed.serie
-    nf.emitente_cnpj = parsed.emit_cnpj
-    nf.emitente_nome = parsed.emit_nome
-    nf.data_emissao = parsed.data_emissao
-    nf.valor_total = parsed.valor_total
-    return "resumo"
+    return "nfe-diesel"
 
 
 def _aplicar_evento(db: Session, doc: DocDFe) -> str:
+    """Aplica eventos apenas em notas que já temos no banco (diesel)."""
     parsed = parse_evento(doc.xml)
     if parsed is None or not parsed.chave:
         return "evento-invalido"
     nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
     if nf is None:
-        return "evento-sem-nf"
+        return "evento-fora-do-escopo"  # evento de NFe que não é diesel
     if parsed.is_cancelamento:
         nf.cancelada = True
         return "cancelamento"
-    if parsed.tp_evento == "210210":
-        nf.manifestada = True
-        return "manifestacao-confirmada"
     return f"evento-{parsed.tp_evento}"
 
 
@@ -201,60 +162,19 @@ def _aplicar(db: Session, doc: DocDFe) -> str:
     if schema.startswith("procnfe") or schema.startswith("nfe"):
         return _aplicar_nfe(db, doc)
     if schema.startswith("resnfe"):
-        return _aplicar_resumo(db, doc)
+        # Resumos são ignorados: a manifestação é feita pela contabilidade,
+        # e quando isso acontece a NFe completa entra na faixa de NSU.
+        return "resumo-ignorado"
     if schema.startswith("proceventonfe") or schema.startswith("evento"):
         return _aplicar_evento(db, doc)
     # fallback por inspeção do conteúdo
     if b"<resNFe" in doc.xml:
-        return _aplicar_resumo(db, doc)
+        return "resumo-ignorado"
     if b"infNFe" in doc.xml:
         return _aplicar_nfe(db, doc)
     if b"infEvento" in doc.xml:
         return _aplicar_evento(db, doc)
     return f"schema-desconhecido:{schema}"
-
-
-# ---------- manifestação automática ----------
-
-def _manifestar_pendentes(db: Session, client: SefazClient) -> dict:
-    """Para cada resumo pendente: envia evento 210210 + consChNFe.
-    Se a NFe completa não tem diesel, _aplicar_nfe deleta o resumo automaticamente.
-    """
-    pendentes = (
-        db.query(NotaFiscal)
-        .filter(NotaFiscal.is_resumo.is_(True),
-                NotaFiscal.manifestada.is_(False),
-                NotaFiscal.cancelada.is_(False))
-        .limit(50)
-        .all()
-    )
-    out = {"tentadas": 0, "ok": 0, "completas": 0, "descartadas": 0, "falhas": 0}
-    for nf in pendentes:
-        out["tentadas"] += 1
-        chave = nf.chave
-        try:
-            ret = manifestar_ciencia(client, chave)
-        except Exception:  # noqa: BLE001
-            log.exception("Falha manifestando %s", chave)
-            out["falhas"] += 1
-            continue
-        if not ret["ok"]:
-            out["falhas"] += 1
-            continue
-        nf.manifestada = True
-        out["ok"] += 1
-        try:
-            _, _, docs = client.consultar_chave(settings.cnpj_limpo, chave)
-            for d in docs:
-                resultado = _aplicar(db, d)
-                if resultado == "nfe-completa":
-                    out["completas"] += 1
-                elif resultado == "resumo-descartado-sem-diesel":
-                    out["descartadas"] += 1
-        except Exception:  # noqa: BLE001
-            log.exception("Falha puxando NFe completa após manifestação %s", chave)
-        db.commit()
-    return out
 
 
 # ---------- entrada principal ----------
@@ -304,13 +224,6 @@ def processar(db: Session, *, force: bool = False) -> dict:
 
     db.commit()
 
-    manifestacao = None
-    if settings.MANIFESTAR_AUTO and not bloqueado:
-        try:
-            manifestacao = _manifestar_pendentes(db, client)
-        except Exception:  # noqa: BLE001
-            log.exception("Erro na manifestação automática")
-
     if not bloqueado:
         set_state(db, LAST_OK_KEY, datetime.now(timezone.utc).isoformat())
         db.commit()
@@ -318,23 +231,4 @@ def processar(db: Session, *, force: bool = False) -> dict:
     resumo = avaliar_e_alertar(db)
     resumo["fonte"] = "sefaz"
     resumo["contadores"] = contadores
-    if manifestacao is not None:
-        resumo["manifestacao"] = manifestacao
     return resumo
-
-
-def manifestar_chave(db: Session, chave: str) -> dict:
-    """Disparo manual de manifestação para uma chave específica."""
-    client = get_client()
-    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == chave).first()
-    ret = manifestar_ciencia(client, chave)
-    if ret["ok"] and nf is not None:
-        nf.manifestada = True
-        try:
-            _, _, docs = client.consultar_chave(settings.cnpj_limpo, chave)
-            for d in docs:
-                _aplicar(db, d)
-        except Exception:  # noqa: BLE001
-            log.exception("Falha em consChNFe após manifestação")
-        db.commit()
-    return ret

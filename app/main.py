@@ -18,7 +18,6 @@ from .database import get_db, run_migrations
 from .models import CotaPeriodo, NotaFiscal
 from .services import periodo as periodo_svc
 from .services.ingest import (
-    manifestar_chave,
     status_bloqueio_656,
     ultima_sincronizacao,
 )
@@ -108,14 +107,10 @@ def _kpis(db: Session, p: CotaPeriodo, inicio: date | None = None,
     pct = percentual(consumo, cota)
     restante = cota - consumo
     status = "ok" if pct < 70 else ("warn" if pct < 95 else "crit")
-    pendentes = db.query(NotaFiscal).filter(
-        NotaFiscal.is_resumo.is_(True),
-        NotaFiscal.cancelada.is_(False),
-    ).count()
     canceladas = db.query(NotaFiscal).filter(NotaFiscal.cancelada.is_(True)).count()
     return {
         "consumo": consumo, "cota": cota, "pct": pct, "restante": restante,
-        "status": status, "pendentes": pendentes, "canceladas": canceladas,
+        "status": status, "canceladas": canceladas,
         "inicio": inicio, "fim": fim, "periodo": p,
     }
 
@@ -312,15 +307,3 @@ def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
     periodo_svc.ativar(db, periodo_id)
     return RedirectResponse("/configuracao?msg=Periodo+ativado", status_code=303)
 
-
-# ---------- ações ----------
-
-@app.post("/manifestar/{chave}", dependencies=[Depends(require_login)])
-def manifestar(chave: str, db: Session = Depends(get_db)):
-    if len(chave) != 44 or not chave.isdigit():
-        return {"ok": False, "erro": "chave inválida"}
-    try:
-        return {"ok": True, **manifestar_chave(db, chave)}
-    except Exception as ex:  # noqa: BLE001
-        log.exception("Falha manifestação manual")
-        return {"ok": False, "erro": str(ex)}
