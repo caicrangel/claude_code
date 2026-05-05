@@ -31,3 +31,24 @@ def run_migrations() -> None:
     with engine.begin() as conn:
         for sql in _MIGRATIONS:
             conn.execute(text(sql))
+    _seed_periodo_inicial()
+
+
+def _seed_periodo_inicial() -> None:
+    """Cria o período inicial a partir do .env quando o banco está vazio."""
+    from decimal import Decimal
+    from .models import CotaPeriodo
+    db = SessionLocal()
+    try:
+        if db.query(CotaPeriodo).count() > 0:
+            return
+        db.add(CotaPeriodo(
+            nome="Período inicial",
+            inicio=settings.PERIODO_INICIO,
+            fim=settings.PERIODO_FIM,
+            cota_litros=Decimal(str(settings.COTA_LITROS)),
+            ativo=True,
+        ))
+        db.commit()
+    finally:
+        db.close()

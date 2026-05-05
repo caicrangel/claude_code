@@ -47,19 +47,24 @@ h2 { margin: 1.5rem 0 0.6rem; font-size: 1.15rem; }
 /* === Topbar === */
 .topbar {
   display: flex; align-items: center; gap: 1.5rem;
-  padding: 0.9rem 2rem;
+  padding: 0.7rem 1.5rem;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.topbar .brand { font-weight: 700; font-size: 1.05rem; }
+.topbar .brand {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  font-weight: 700; font-size: 1.05rem; color: var(--text);
+}
+.topbar .brand:hover { text-decoration: none; }
+.topbar .brand .logo { height: 32px; width: auto; max-width: 180px; object-fit: contain; }
 .topbar nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
 .topbar nav a { color: var(--text); }
 .topbar nav a:hover { color: var(--accent); text-decoration: none; }
 .theme-toggle {
   background: transparent; border: 1px solid var(--border); color: var(--text);
-  width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;
-  padding: 0;
+  width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1rem; padding: 0; line-height: 1;
 }
 .theme-toggle:hover { border-color: var(--accent); }
 :root[data-theme="dark"] .theme-light { display: none; }
@@ -71,10 +76,12 @@ main { padding: 1.5rem 2rem 3rem; max-width: 1400px; margin: 0 auto; }
 .login-card {
   max-width: 380px; margin: 4rem auto; background: var(--panel);
   padding: 2rem; border-radius: 12px; border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow); text-align: center;
 }
+.login-card .login-logo { max-height: 60px; max-width: 220px; margin: 0 auto 1rem; display: block; }
 .login-card h1 { margin-top: 0; }
-.login-card form { display: flex; flex-direction: column; gap: 1rem; }
+.login-card .login-sub { margin: 0 0 1.2rem; }
+.login-card form { display: flex; flex-direction: column; gap: 1rem; text-align: left; }
 .login-card label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
 .login-card .erro { background: var(--crit); color: #fff; padding: 0.6rem; border-radius: 6px; }
 
@@ -92,31 +99,48 @@ button {
 }
 button:hover { filter: brightness(1.05); }
 
-/* === Barra de progresso (dashboard) === */
+/* === Filtros === */
+.filtros {
+  display: flex; gap: 1rem; align-items: end; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border);
+  padding: 1rem; border-radius: 10px; margin: 1rem 0 1.5rem;
+}
+.filtros label { display: flex; flex-direction: column; gap: 0.3rem;
+                 font-size: 0.78rem; color: var(--muted); text-transform: uppercase;
+                 letter-spacing: 0.04em; min-width: 180px; }
+.filtros input, .filtros select { background: var(--panel-soft); }
+.filtros button { align-self: end; }
+
+/* === Barra de progresso === */
 .bar { height: 14px; background: var(--panel); border: 1px solid var(--border);
        border-radius: 8px; overflow: hidden; margin: 1rem 0; }
 .bar .fill { height: 100%; background: var(--ok); transition: width 0.4s; }
 .status-warn .fill { background: var(--warn); }
 .status-crit .fill { background: var(--crit); }
 
-/* === KPIs === */
-.kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0 1.5rem; }
-.kpi > div {
-  background: var(--panel); border: 1px solid var(--border);
-  padding: 1rem; border-radius: 10px; box-shadow: var(--shadow);
+/* === KPIs (dashboard - .kpi e relatórios - .kpi-grid) === */
+.kpi, .kpi-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 1rem 0 1.5rem;
 }
-.kpi strong { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
-.kpi span { color: var(--muted); font-size: 0.85rem; }
-
-.kpi-grid { display: grid; gap: 1rem; grid-template-columns: repeat(4, 1fr); margin: 1rem 0 1.5rem; }
-.kpi-card {
+.kpi > div, .kpi-card {
   background: var(--panel); border: 1px solid var(--border);
-  padding: 1rem; border-radius: 10px; display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 1rem; border-radius: 10px;
   box-shadow: var(--shadow);
 }
-.kpi-card span { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.kpi-card strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
-.kpi-card small { color: var(--muted); font-size: 0.8rem; }
+.kpi > div > strong, .kpi-card .kpi-value, .kpi-card strong {
+  display: block; font-size: 1.5rem; line-height: 1.2;
+  font-variant-numeric: tabular-nums; margin: 0.1rem 0;
+}
+.kpi > div > span, .kpi-card .kpi-label, .kpi-card span {
+  display: block; color: var(--muted); font-size: 0.78rem;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.kpi-card .kpi-sub, .kpi-card small {
+  display: block; color: var(--muted); font-size: 0.8rem;
+  text-transform: none; letter-spacing: 0; margin-top: 0.15rem;
+}
 
 /* === Sync === */
 .sync-form { margin: 1rem 0 2rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
@@ -124,6 +148,7 @@ button:hover { filter: brightness(1.05); }
 .sync-msg.ok   { background: rgba(34, 197, 94, 0.15);  color: var(--ok); }
 .sync-msg.warn { background: rgba(245, 158, 11, 0.15); color: var(--warn); }
 .sync-msg.err  { background: rgba(239, 68, 68, 0.15);  color: var(--crit); }
+.sync-msg.inline { display: inline-block; margin-bottom: 1rem; }
 
 /* === Projeção === */
 .projecao {
@@ -135,6 +160,7 @@ button:hover { filter: brightness(1.05); }
 .tag { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px;
        font-size: 0.78rem; font-weight: 600; margin-left: 0.4rem; }
 .tag-ok   { background: rgba(34,197,94,0.15);  color: var(--ok); }
+.tag-warn { background: rgba(245,158,11,0.15); color: var(--warn); }
 .tag-crit { background: rgba(239,68,68,0.15);  color: var(--crit); }
 
 /* === Charts === */
@@ -148,6 +174,7 @@ button:hover { filter: brightness(1.05); }
 @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
 @media (max-width: 800px) {
   .kpi, .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .topbar nav a { font-size: 0.85rem; }
 }
 
 /* === Tabelas === */
@@ -168,6 +195,7 @@ th {
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 0.78rem; }
 
+/* === Status / linhas / botões === */
 .status-line { display: flex; gap: 0.6rem; align-items: center; color: var(--muted);
                font-size: 0.9rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .status-line strong { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -177,7 +205,21 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .row-pendente td { background: rgba(245, 158, 11, 0.05); }
 .row-cancelada td { background: rgba(239, 68, 68, 0.05); text-decoration: line-through;
                     text-decoration-color: var(--crit); }
-.btn-mini { font-size: 0.75rem; padding: 0.25rem 0.55rem; border-radius: 5px;
-            background: var(--panel-soft); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
-.btn-mini:hover { border-color: var(--accent); color: var(--accent); }
-.tag.tag-warn { background: rgba(245, 158, 11, 0.15); color: var(--warn); }
+.btn-mini {
+  display: inline-block; font-size: 0.75rem; padding: 0.25rem 0.55rem;
+  border-radius: 5px; background: var(--panel-soft); color: var(--text);
+  border: 1px solid var(--border); font-weight: 500; cursor: pointer;
+  text-decoration: none;
+}
+.btn-mini:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+/* === Forms grid (configuração) === */
+.grid {
+  display: grid; gap: 0.8rem; grid-template-columns: repeat(2, 1fr); margin: 0.6rem 0 1rem;
+  background: var(--panel); border: 1px solid var(--border);
+  padding: 1rem; border-radius: 10px;
+}
+.grid label { display: flex; flex-direction: column; gap: 0.3rem;
+              font-size: 0.78rem; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.04em; }
+.grid button { grid-column: span 2; justify-self: start; }

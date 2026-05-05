@@ -4,48 +4,53 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Cota Diesel{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v=3">
   <script>
-    // aplica tema antes de pintar pra evitar flash
+    // tema aplicado antes da pintura para evitar flash
     (function(){
-      var t = localStorage.getItem('theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', t);
+      try {
+        var t = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e) { document.documentElement.setAttribute('data-theme','dark'); }
     })();
+    function toggleTheme(){
+      try {
+        var c = document.documentElement.getAttribute('data-theme') || 'dark';
+        var n = c === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', n);
+        localStorage.setItem('theme', n);
+        document.dispatchEvent(new CustomEvent('themechange', {detail: n}));
+      } catch(e) { console.error('toggleTheme', e); }
+    }
   </script>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   {% block head %}{% endblock %}
 </head>
 <body>
   <header class="topbar">
-    <span class="brand">⛽ Cota Diesel</span>
-    {% if request.session.get('auth') %}
-      <nav>
+    <a class="brand" href="/dashboard">
+      {% if logo_url %}<img src="{{ logo_url }}" alt="{{ empresa_nome }}" class="logo">{% else %}⛽{% endif %}
+      <span>{{ empresa_nome or 'Cota Diesel' }}</span>
+    </a>
+    <nav>
+      {% if request.session.get('auth') %}
         <a href="/dashboard">Visão geral</a>
         <a href="/relatorios">Relatórios</a>
-        <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
-          <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
-        </button>
+        <a href="/configuracao">Configuração</a>
+      {% endif %}
+      <button type="button" class="theme-toggle"
+              onclick="toggleTheme()"
+              title="Alternar tema claro/escuro"
+              aria-label="Alternar tema">
+        <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
+      </button>
+      {% if request.session.get('auth') %}
         <a href="/logout">Sair</a>
-      </nav>
-    {% else %}
-      <nav>
-        <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Alternar tema">
-          <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
-        </button>
-      </nav>
-    {% endif %}
+      {% endif %}
+    </nav>
   </header>
   <main>
     {% block content %}{% endblock %}
   </main>
-  <script>
-    function toggleTheme(){
-      var cur = document.documentElement.getAttribute('data-theme') || 'dark';
-      var nxt = cur === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', nxt);
-      localStorage.setItem('theme', nxt);
-      document.dispatchEvent(new CustomEvent('themechange', {detail: nxt}));
-    }
-  </script>
 </body>
 </html>

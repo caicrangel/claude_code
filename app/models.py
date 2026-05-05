@@ -1,10 +1,26 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint,
+    Boolean, Column, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint,
 )
 
 from .database import Base
+
+
+class CotaPeriodo(Base):
+    """Histórico de períodos de cota. Apenas um pode estar ativo (ativo=True).
+    Mudar de período não apaga as NFs — todas ficam no banco e podem ser
+    consultadas filtrando por data nos relatórios."""
+    __tablename__ = "cota_periodos"
+
+    id = Column(Integer, primary_key=True)
+    nome = Column(String(120))
+    inicio = Column(Date, nullable=False)
+    fim = Column(Date, nullable=False)
+    cota_litros = Column(Numeric(14, 3), nullable=False)
+    ativo = Column(Boolean, default=False, nullable=False, index=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class NotaFiscal(Base):

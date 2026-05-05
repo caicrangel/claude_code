@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # Localização
     TZ: str = "America/Sao_Paulo"
 
+    # Logo - URL completa OU caminho relativo a /static (ex: "empresa.png").
+    # Vazio = mostra só o ícone padrão.
+    EMPRESA_LOGO: str = ""
+
     # SMTP
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

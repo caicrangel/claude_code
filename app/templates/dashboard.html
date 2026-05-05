@@ -5,7 +5,7 @@
   <h1>{{ settings.EMPRESA_NOME }}</h1>
   <div class="meta">
     CNPJ {{ settings.cnpj_limpo }}
-    · período {{ settings.PERIODO_INICIO|data_curta }} → {{ settings.PERIODO_FIM|data_curta }}
+    · período {% if periodo.nome %}<strong>{{ periodo.nome }}</strong>: {% endif %}{{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}
   </div>
   <p class="muted">Atualizado em {{ now|data }} (horário local) · auto-refresh a cada 60s</p>
 

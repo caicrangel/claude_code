@@ -1,25 +1,33 @@
-"""Lógica de cota e disparo de alertas (single-tenant)."""
+"""Cota e disparo de alertas."""
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import Alerta, NotaFiscal
+from ..models import Alerta, CotaPeriodo, NotaFiscal
 from .email import send_email
+from .periodo import get_periodo_ativo
 
 log = logging.getLogger(__name__)
 
 
-def litros_consumidos(db: Session) -> Decimal:
+def litros_consumidos(db: Session, *, inicio: date | None = None,
+                      fim: date | None = None) -> Decimal:
+    if inicio is None or fim is None:
+        p = get_periodo_ativo(db)
+        if p is None:
+            return Decimal(0)
+        inicio, fim = p.inicio, p.fim
     total = (
         db.query(func.coalesce(func.sum(NotaFiscal.litros_diesel), 0))
         .filter(
-            NotaFiscal.data_emissao >= settings.PERIODO_INICIO,
-            NotaFiscal.data_emissao <= settings.PERIODO_FIM,
+            NotaFiscal.data_emissao >= inicio,
+            NotaFiscal.data_emissao <= fim,
             NotaFiscal.is_resumo.is_(False),
             NotaFiscal.cancelada.is_(False),
         )
@@ -28,19 +36,22 @@ def litros_consumidos(db: Session) -> Decimal:
     return Decimal(total or 0)
 
 
-def percentual(consumo: Decimal) -> float:
-    cota = Decimal(str(settings.COTA_LITROS))
+def percentual(consumo: Decimal, cota: Decimal) -> float:
     if cota <= 0:
         return 0.0
     return float((consumo / cota) * 100)
 
 
 def avaliar_e_alertar(db: Session) -> dict:
-    consumo = litros_consumidos(db)
-    cota = Decimal(str(settings.COTA_LITROS))
-    pct = percentual(consumo)
+    p = get_periodo_ativo(db)
+    if p is None:
+        return {"consumo": 0.0, "cota": 0.0, "pct": 0.0, "restante": 0.0,
+                "alertas_disparados": []}
+    consumo = litros_consumidos(db, inicio=p.inicio, fim=p.fim)
+    cota = Decimal(p.cota_litros or 0)
+    pct = percentual(consumo, cota)
     restante = cota - consumo
-    periodo_iso = settings.PERIODO_INICIO.isoformat()
+    periodo_iso = p.inicio.isoformat()
 
     disparados: list[int] = []
     for thr in sorted(settings.thresholds):
@@ -54,7 +65,7 @@ def avaliar_e_alertar(db: Session) -> dict:
             continue
         msg = (
             f"Empresa: {settings.EMPRESA_NOME} (CNPJ {settings.cnpj_limpo})\n"
-            f"Período: {settings.PERIODO_INICIO} a {settings.PERIODO_FIM}\n"
+            f"Período: {p.inicio} a {p.fim}\n"
             f"Cota: {cota:.3f} L\n"
             f"Consumido: {consumo:.3f} L ({pct:.2f}%)\n"
             f"Restante: {restante:.3f} L\n\n"

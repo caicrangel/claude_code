@@ -2,7 +2,9 @@
 {% block title %}Login{% endblock %}
 {% block content %}
 <div class="login-card">
-  <h1>Acessar painel</h1>
+  {% if logo_url %}<img src="{{ logo_url }}" class="login-logo" alt="{{ empresa_nome }}">{% endif %}
+  <h1>{{ empresa_nome or 'Cota Diesel' }}</h1>
+  <p class="muted login-sub">Acesso ao painel</p>
   {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
   <form method="post" action="/login">
     <label>Email <input type="email" name="email" required autofocus></label>
