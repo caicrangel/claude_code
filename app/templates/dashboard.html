@@ -38,7 +38,7 @@
     </div>
 
     <div class="status-line">
-      <span>Notas de diesel: <strong>{{ total_notas|inteiro }}</strong></span>
+      <span>Notas no período: <strong>{{ total_notas|inteiro }}</strong></span>
       <span class="sep">·</span>
       <span>Canceladas: <strong>{{ canceladas|inteiro }}</strong></span>
     </div>
@@ -49,7 +49,7 @@
       A manifestação de notas é feita externamente pela contabilidade.
     </p>
 
-    <h2>Notas de diesel ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
+    <h2>Notas de diesel no período ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>
       <thead>
         <tr>

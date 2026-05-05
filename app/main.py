@@ -107,7 +107,14 @@ def _kpis(db: Session, p: CotaPeriodo, inicio: date | None = None,
     pct = percentual(consumo, cota)
     restante = cota - consumo
     status = "ok" if pct < 70 else ("warn" if pct < 95 else "crit")
-    canceladas = db.query(NotaFiscal).filter(NotaFiscal.cancelada.is_(True)).count()
+    canceladas = (
+        db.query(NotaFiscal)
+        .filter(
+            NotaFiscal.data_emissao >= inicio,
+            NotaFiscal.data_emissao <= fim,
+            NotaFiscal.cancelada.is_(True),
+        ).count()
+    )
     return {
         "consumo": consumo, "cota": cota, "pct": pct, "restante": restante,
         "status": status, "canceladas": canceladas,
@@ -121,7 +128,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     if p is None:
         return RedirectResponse("/configuracao", status_code=303)
     k = _kpis(db, p)
-    total_notas = db.query(NotaFiscal).count()
+    total_notas = (
+        db.query(NotaFiscal)
+        .filter(NotaFiscal.data_emissao >= p.inicio,
+                NotaFiscal.data_emissao <= p.fim)
+        .count()
+    )
     notas = (
         db.query(NotaFiscal)
         .filter(NotaFiscal.data_emissao >= p.inicio,
