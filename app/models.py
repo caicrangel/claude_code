@@ -40,9 +40,8 @@ class NotaFiscal(Base):
     cfop = Column(String(4))
     xml = Column(Text)
     # Status:
-    is_resumo = Column(Boolean, default=False, nullable=False)     # só recebemos resNFe
-    manifestada = Column(Boolean, default=False, nullable=False)   # evento 210210 OK
-    cancelada = Column(Boolean, default=False, nullable=False)     # evento 110111 OK
+    is_resumo = Column(Boolean, default=False, nullable=False)
+    cancelada = Column(Boolean, default=False, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

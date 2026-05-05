@@ -167,6 +167,10 @@ def _aplicar(db: Session, doc: DocDFe) -> str:
         return "resumo-ignorado"
     if schema.startswith("proceventonfe") or schema.startswith("evento"):
         return _aplicar_evento(db, doc)
+    if schema.startswith("resevento"):
+        # retEvento / resEventoNFe — recibo da SEFAZ para evento enviado pela contabilidade.
+        # Não há nada para processar; ignorar silenciosamente.
+        return "resevento-ignorado"
     # fallback por inspeção do conteúdo
     if b"<resNFe" in doc.xml:
         return "resumo-ignorado"
