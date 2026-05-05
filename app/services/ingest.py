@@ -84,6 +84,27 @@ def _registrar_bloqueio_656(db: Session) -> None:
     log.warning("Bloqueio cStat=656 ativado até %s (1h)", ate.isoformat())
 
 
+def status_bloqueio_656(db: Session) -> dict | None:
+    """Retorna info do bloqueio se ativo, None caso contrário."""
+    raw = get_state(db, BLOQUEIO_656_KEY, "")
+    if not raw:
+        return None
+    try:
+        ate = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    agora = datetime.now(timezone.utc)
+    if agora >= ate:
+        return None
+    restante = int((ate - agora).total_seconds())
+    return {
+        "bloqueado": True,
+        "ate_utc": ate,
+        "segundos_restantes": restante,
+        "minutos_restantes": restante // 60,
+    }
+
+
 # ---------- aplicação de cada tipo ----------
 
 def _aplicar_nfe(db: Session, doc: DocDFe) -> str:

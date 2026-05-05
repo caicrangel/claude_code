@@ -17,7 +17,12 @@ from .config import settings
 from .database import get_db, run_migrations
 from .models import CotaPeriodo, NotaFiscal
 from .services import periodo as periodo_svc
-from .services.ingest import TooSoonError, manifestar_chave, processar_multiplas_ufs
+from .services.ingest import (
+    TooSoonError,
+    manifestar_chave,
+    processar_multiplas_ufs,
+    status_bloqueio_656,
+)
 from .services.quota import litros_consumidos, percentual
 
 logging.basicConfig(level=logging.INFO)
@@ -130,8 +135,10 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .order_by(NotaFiscal.data_emissao.desc().nullslast())
         .limit(200).all()
     )
+    bloqueio = status_bloqueio_656(db)
     return render("dashboard.html", request, **k,
-                  notas=notas, total_notas=total_notas, now=fmt.now_local())
+                  notas=notas, total_notas=total_notas, now=fmt.now_local(),
+                  bloqueio_sefaz=bloqueio)
 
 
 def _parse_date(v: str | None, default: date) -> date:

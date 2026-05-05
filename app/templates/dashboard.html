@@ -10,6 +10,17 @@
   <p class="muted">Atualizado em {{ now|data }} (horário local) · auto-refresh a cada 60s</p>
 
   <div id="painel" class="status-{{ status }}">
+    {% if bloqueio_sefaz %}
+      <div class="alert-bloqueio">
+        <strong>⏳ SEFAZ temporariamente indisponível</strong>
+        <p>A SEFAZ retornou <code>cStat=656</code> (consumo indevido) e bloqueou as consultas.
+           Tentativas serão retomadas automaticamente em
+           <strong>{{ bloqueio_sefaz.minutos_restantes }} minuto(s)</strong>.</p>
+        <small class="muted">Isso ocorre quando há muitas consultas em curto período.
+           Nenhuma ação é necessária — o sistema aguarda e retoma sozinho.</small>
+      </div>
+    {% endif %}
+
     <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
 
     <div class="kpi">

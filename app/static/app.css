@@ -142,6 +142,23 @@ button:hover { filter: brightness(1.05); }
   text-transform: none; letter-spacing: 0; margin-top: 0.15rem;
 }
 
+/* === Alert bloqueio SEFAZ === */
+.alert-bloqueio {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid var(--warn);
+  border-left: 4px solid var(--warn);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 1.2rem;
+}
+.alert-bloqueio strong { color: var(--warn); display: block; margin-bottom: 0.3rem; }
+.alert-bloqueio p { margin: 0.2rem 0; color: var(--text); font-size: 0.92rem; }
+.alert-bloqueio code {
+  background: var(--panel-soft); padding: 0.05rem 0.4rem; border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 0.85em;
+}
+.alert-bloqueio small { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
+
 /* === Sync === */
 .sync-form { margin: 1rem 0 2rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 .sync-msg { font-size: 0.9rem; padding: 0.4rem 0.7rem; border-radius: 6px; }
