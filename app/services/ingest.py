@@ -35,16 +35,13 @@ class TooSoonError(RuntimeError):
         self.segundos_restantes = segundos_restantes
 
 
-def get_client() -> SefazClient:
-    global _client
-    if _client is None:
-        _client = SefazClient(
-            cert_path=settings.CERT_PATH,
-            cert_password=settings.CERT_PASSWORD,
-            ambiente=settings.SEFAZ_AMBIENTE,
-            uf=settings.SEFAZ_UF,
-        )
-    return _client
+def get_client(uf: str = "SP") -> SefazClient:
+    return SefazClient(
+        cert_path=settings.CERT_PATH,
+        cert_password=settings.CERT_PASSWORD,
+        ambiente=settings.SEFAZ_AMBIENTE,
+        uf=uf,
+    )
 
 
 def _segundos_desde_ultima(db: Session) -> int | None:
@@ -192,28 +189,29 @@ def _manifestar_pendentes(db: Session, client: SefazClient) -> dict:
 
 # ---------- entrada principal ----------
 
-def processar(db: Session, *, force: bool = False) -> dict:
+def processar(db: Session, *, uf: str = "SP", force: bool = False) -> dict:
     if not settings.cnpj_limpo:
         raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
     _check_throttle(db, force)
-    client = get_client()
+    client = get_client(uf)
     cnpj = settings.cnpj_limpo
-    ult_nsu = get_state(db, NSU_KEY, "0")
+    nsu_key = f"ultimo_nsu_{uf}"
+    ult_nsu = get_state(db, nsu_key, "0")
 
     contadores: dict[str, int] = {}
     for _ in range(20):
         try:
             cstat, ult_recebido, docs = client.consultar_nsu(cnpj, ult_nsu)
         except Exception as e:  # noqa: BLE001
-            log.exception("Erro consultando SEFAZ: %s", e)
+            log.exception("Erro consultando SEFAZ %s: %s", uf, e)
             break
-        log.info("SEFAZ cStat=%s ultNSU=%s docs=%d", cstat, ult_recebido, len(docs))
+        log.info("SEFAZ %s cStat=%s ultNSU=%s docs=%d", uf, cstat, ult_recebido, len(docs))
         for doc in docs:
             r = _aplicar(db, doc)
             contadores[r] = contadores.get(r, 0) + 1
         if ult_recebido and ult_recebido != ult_nsu:
             ult_nsu = ult_recebido
-            set_state(db, NSU_KEY, ult_nsu)
+            set_state(db, nsu_key, ult_nsu)
         if cstat == "137" or not docs:
             break
     db.commit()
@@ -224,10 +222,34 @@ def processar(db: Session, *, force: bool = False) -> dict:
 
     resumo = avaliar_e_alertar(db)
     resumo["fonte"] = "sefaz"
+    resumo["uf"] = uf
     resumo["contadores"] = contadores
     if manifestacao is not None:
         resumo["manifestacao"] = manifestacao
     return resumo
+
+
+def processar_multiplas_ufs(db: Session, *, force: bool = False) -> dict:
+    """Consulta múltiplas UFs configuradas e retorna resumo combinado."""
+    resultado_final = {
+        "fonte": "sefaz",
+        "ufs_consultadas": [],
+        "contadores": {},
+        "total_alertas": 0,
+    }
+
+    for uf in settings.ufs_consulta:
+        try:
+            resultado = processar(db, uf=uf, force=force)
+            resultado_final["ufs_consultadas"].append(uf)
+            for k, v in resultado.get("contadores", {}).items():
+                resultado_final["contadores"][f"{uf}_{k}"] = v
+        except Exception:  # noqa: BLE001
+            log.exception("Erro processando UF %s", uf)
+
+    resumo = avaliar_e_alertar(db)
+    resultado_final["total_alertas"] = resumo.get("alertas_disparados", 0)
+    return resultado_final
 
 
 def manifestar_chave(db: Session, chave: str) -> dict:

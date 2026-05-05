@@ -6,7 +6,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from .config import settings
 from .database import SessionLocal, run_migrations
-from .services.ingest import TooSoonError, processar
+from .services.ingest import TooSoonError, processar_multiplas_ufs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("worker")
@@ -15,8 +15,9 @@ log = logging.getLogger("worker")
 def tick():
     db = SessionLocal()
     try:
-        log.info("Tick: consultando SEFAZ p/ %s (%s)", settings.EMPRESA_NOME, settings.cnpj_limpo)
-        log.info("Resultado: %s", processar(db))
+        log.info("Tick: consultando SEFAZ p/ %s (%s) UFs=%s",
+                 settings.EMPRESA_NOME, settings.cnpj_limpo, ",".join(settings.ufs_consulta))
+        log.info("Resultado: %s", processar_multiplas_ufs(db))
     except TooSoonError as e:
         log.info("Tick ignorado (throttle): %s", e)
     except Exception:  # noqa: BLE001

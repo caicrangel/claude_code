@@ -17,7 +17,7 @@ from .config import settings
 from .database import get_db, run_migrations
 from .models import CotaPeriodo, NotaFiscal
 from .services import periodo as periodo_svc
-from .services.ingest import TooSoonError, manifestar_chave, processar
+from .services.ingest import TooSoonError, manifestar_chave, processar_multiplas_ufs
 from .services.quota import litros_consumidos, percentual
 
 logging.basicConfig(level=logging.INFO)
@@ -309,7 +309,7 @@ def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
 @app.post("/sync", dependencies=[Depends(require_login)])
 def sync_now(db: Session = Depends(get_db)):
     try:
-        return {"ok": True, **processar(db)}
+        return {"ok": True, **processar_multiplas_ufs(db)}
     except TooSoonError as ex:
         return {"ok": False, "throttle": True, "segundos_restantes": ex.segundos_restantes,
                 "erro": str(ex)}
