@@ -26,6 +26,8 @@ from .sefaz import DocDFe, SefazClient
 log = logging.getLogger(__name__)
 NSU_KEY = "ultimo_nsu"
 LAST_CALL_KEY = "ultima_consulta_em"
+BLOQUEIO_656_KEY = "bloqueio_656_ate"  # ISO timestamp; bloqueia consultas até essa hora
+BLOQUEIO_656_SEGUNDOS = 3600  # 1 hora após cStat=656
 
 _client: SefazClient | None = None
 
@@ -57,10 +59,29 @@ def _segundos_desde_ultima(db: Session) -> int | None:
 
 
 def _check_throttle(db: Session, force: bool) -> None:
+    # Bloqueio prolongado por cStat=656 (consumo indevido)
+    bloqueio_raw = get_state(db, BLOQUEIO_656_KEY, "")
+    if bloqueio_raw and not force:
+        try:
+            bloqueio_ate = datetime.fromisoformat(bloqueio_raw)
+            agora = datetime.now(timezone.utc)
+            if agora < bloqueio_ate:
+                restante = int((bloqueio_ate - agora).total_seconds())
+                raise TooSoonError(restante)
+        except ValueError:
+            pass
+
     desde = _segundos_desde_ultima(db)
     if not force and desde is not None and desde < settings.MIN_SEFAZ_INTERVAL:
         raise TooSoonError(settings.MIN_SEFAZ_INTERVAL - desde)
     set_state(db, LAST_CALL_KEY, datetime.now(timezone.utc).isoformat())
+
+
+def _registrar_bloqueio_656(db: Session) -> None:
+    from datetime import timedelta
+    ate = datetime.now(timezone.utc) + timedelta(seconds=BLOQUEIO_656_SEGUNDOS)
+    set_state(db, BLOQUEIO_656_KEY, ate.isoformat())
+    log.warning("Bloqueio cStat=656 ativado até %s (1h)", ate.isoformat())
 
 
 # ---------- aplicação de cada tipo ----------
@@ -216,8 +237,10 @@ def processar(db: Session, *, uf: str = "SP", force: bool = False,
             ult_nsu = ult_recebido
             set_state(db, nsu_key, ult_nsu)
         if cstat == "656":
-            log.warning("SEFAZ %s cStat=656 (consumo indevido) - aguarde 1h", uf)
+            log.warning("SEFAZ %s cStat=656 (consumo indevido) - bloqueando 1h", uf)
             contadores["consumo-indevido-656"] = contadores.get("consumo-indevido-656", 0) + 1
+            _registrar_bloqueio_656(db)
+            db.commit()
             break
         if cstat == "137" or not docs:
             break
