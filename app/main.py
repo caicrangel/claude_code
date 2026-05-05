@@ -18,10 +18,9 @@ from .database import get_db, run_migrations
 from .models import CotaPeriodo, NotaFiscal
 from .services import periodo as periodo_svc
 from .services.ingest import (
-    TooSoonError,
     manifestar_chave,
-    processar_multiplas_ufs,
     status_bloqueio_656,
+    ultima_sincronizacao,
 )
 from .services.quota import litros_consumidos, percentual
 
@@ -136,9 +135,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .limit(200).all()
     )
     bloqueio = status_bloqueio_656(db)
+    ultima_sync = ultima_sincronizacao(db)
+    poll_minutos = max(1, settings.POLL_INTERVAL // 60)
     return render("dashboard.html", request, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
-                  bloqueio_sefaz=bloqueio)
+                  bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
+                  poll_minutos=poll_minutos)
 
 
 def _parse_date(v: str | None, default: date) -> date:
@@ -312,17 +314,6 @@ def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
 
 
 # ---------- ações ----------
-
-@app.post("/sync", dependencies=[Depends(require_login)])
-def sync_now(db: Session = Depends(get_db)):
-    try:
-        return {"ok": True, **processar_multiplas_ufs(db)}
-    except TooSoonError as ex:
-        return {"ok": False, "throttle": True, "segundos_restantes": ex.segundos_restantes,
-                "erro": str(ex)}
-    except Exception as ex:  # noqa: BLE001
-        return {"ok": False, "erro": str(ex)}
-
 
 @app.post("/manifestar/{chave}", dependencies=[Depends(require_login)])
 def manifestar(chave: str, db: Session = Depends(get_db)):

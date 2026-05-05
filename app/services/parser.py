@@ -15,11 +15,10 @@ from lxml import etree
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
-# NCM 2710.19xx = óleos diesel (todos os tipos/aditivos).
-# Exigir "DIESEL" na descrição + NCM válido para evitar falsos-positivos.
-# S10, S500, B-S10 são variantes de diesel (comum em descrições).
+# Filtro de diesel: NCM da família 2710.19 (óleos diesel) E descrição contendo
+# a palavra "DIESEL". Manter ambos evita falsos-positivos (ex: lubrificantes
+# que também caem em 271019 mas não são combustível).
 NCM_DIESEL_PREFIXES = ("271019",)
-DIESEL_MODELS = ("S10", "S500", "B-S10", "B S10")  # variantes comuns de diesel
 
 
 @dataclass

@@ -23,6 +23,18 @@ _MIGRATIONS = [
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS cancelada BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
     "CREATE INDEX IF NOT EXISTS ix_notas_nsu ON notas_fiscais(nsu)",
+    # Consolida NSUs antigos (multi-UF) no NSU único (single-UF)
+    """
+    INSERT INTO state (key, value)
+    SELECT 'ultimo_nsu', MAX(value::bigint)::text
+    FROM state
+    WHERE key LIKE 'ultimo_nsu_%'
+    HAVING MAX(value::bigint) > COALESCE(
+        (SELECT value::bigint FROM state WHERE key = 'ultimo_nsu'), 0
+    )
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    """,
+    "DELETE FROM state WHERE key LIKE 'ultimo_nsu_%'",
 ]
 
 

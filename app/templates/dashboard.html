@@ -7,7 +7,14 @@
     CNPJ {{ settings.cnpj_limpo }}
     · período {% if periodo.nome %}<strong>{{ periodo.nome }}</strong>: {% endif %}{{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}
   </div>
-  <p class="muted">Atualizado em {{ now|data }} (horário local) · auto-refresh a cada 60s</p>
+  <p class="muted">
+    Página atualizada em {{ now|data }} · auto-refresh a cada 60s
+    {% if ultima_sync %}
+      · Última consulta SEFAZ em <strong>{{ ultima_sync|data }}</strong>
+    {% else %}
+      · <span class="warn">Nenhuma consulta SEFAZ realizada ainda</span>
+    {% endif %}
+  </p>
 
   <div id="painel" class="status-{{ status }}">
     {% if bloqueio_sefaz %}
@@ -38,28 +45,9 @@
       <span>Canceladas: <strong>{{ canceladas|inteiro }}</strong></span>
     </div>
 
-    <form class="sync-form"
-          hx-post="/sync"
-          hx-swap="none"
-          hx-on::after-request="
-            const r = JSON.parse(event.detail.xhr.response);
-            const el = document.getElementById('sync-msg');
-            if (r.ok) {
-              el.className = 'sync-msg ok';
-              const c = r.contadores || {};
-              const partes = Object.entries(c).map(([k,v]) => `${k}: ${v}`).join(', ') || 'sem novidades';
-              el.textContent = 'Sincronizado SEFAZ — ' + partes;
-              setTimeout(() => htmx.ajax('GET', '/dashboard', {target: '#painel', select: '#painel', swap: 'outerHTML'}), 800);
-            } else if (r.throttle) {
-              el.className = 'sync-msg warn';
-              el.textContent = `Aguarde ${r.segundos_restantes}s antes de consultar a SEFAZ novamente.`;
-            } else {
-              el.className = 'sync-msg err';
-              el.textContent = 'Erro: ' + (r.erro || 'falha desconhecida');
-            }">
-      <button type="submit">Sincronizar com SEFAZ agora</button>
-      <span id="sync-msg" class="sync-msg"></span>
-    </form>
+    <p class="muted sync-info">
+      Sincronização automática a cada {{ poll_minutos }} minuto(s) via worker em background.
+    </p>
 
     <h2>Notas registradas ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>

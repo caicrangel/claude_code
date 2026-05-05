@@ -22,11 +22,13 @@ class Settings(BaseSettings):
     EMAIL_ALERTAS: str = ""
 
     # SEFAZ
+    # NFeDistribuicaoDFe é nacional: retorna NFe emitidas contra o seu CNPJ
+    # de qualquer UF. SEFAZ_UF aqui é apenas a UF do consultante (cUFAutor),
+    # usada para roteamento interno da SEFAZ - NÃO filtra emitente.
     CERT_PATH: str = "/app/certs/certificado.pfx"
     CERT_PASSWORD: str = ""
     SEFAZ_AMBIENTE: int = 1
-    SEFAZ_UF: str = "SP"  # deprecated: usar SEFAZ_UFS
-    SEFAZ_UFS: str = "SP"  # UFs a consultar, separadas por vírgula (ex: "SP,MG,RJ")
+    SEFAZ_UF: str = "SP"
 
     # Manifestação de ciência (evento 210210). Quando true, ao receber um
     # resumo (resNFe), o app envia automaticamente o evento e em seguida
@@ -62,11 +64,6 @@ class Settings(BaseSettings):
     @property
     def cnpj_limpo(self) -> str:
         return "".join(c for c in self.EMPRESA_CNPJ if c.isdigit())
-
-    @property
-    def ufs_consulta(self) -> list[str]:
-        ufs = (self.SEFAZ_UFS or self.SEFAZ_UF or "SP").split(",")
-        return [uf.strip().upper() for uf in ufs if uf.strip()]
 
 
 settings = Settings()
