@@ -11,6 +11,7 @@ Fluxo por docZip recebido:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -189,10 +190,12 @@ def _manifestar_pendentes(db: Session, client: SefazClient) -> dict:
 
 # ---------- entrada principal ----------
 
-def processar(db: Session, *, uf: str = "SP", force: bool = False) -> dict:
+def processar(db: Session, *, uf: str = "SP", force: bool = False,
+              _skip_throttle: bool = False) -> dict:
     if not settings.cnpj_limpo:
         raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
-    _check_throttle(db, force)
+    if not _skip_throttle:
+        _check_throttle(db, force)
     client = get_client(uf)
     cnpj = settings.cnpj_limpo
     nsu_key = f"ultimo_nsu_{uf}"
@@ -212,6 +215,10 @@ def processar(db: Session, *, uf: str = "SP", force: bool = False) -> dict:
         if ult_recebido and ult_recebido != ult_nsu:
             ult_nsu = ult_recebido
             set_state(db, nsu_key, ult_nsu)
+        if cstat == "656":
+            log.warning("SEFAZ %s cStat=656 (consumo indevido) - aguarde 1h", uf)
+            contadores["consumo-indevido-656"] = contadores.get("consumo-indevido-656", 0) + 1
+            break
         if cstat == "137" or not docs:
             break
     db.commit()
@@ -230,7 +237,11 @@ def processar(db: Session, *, uf: str = "SP", force: bool = False) -> dict:
 
 
 def processar_multiplas_ufs(db: Session, *, force: bool = False) -> dict:
-    """Consulta múltiplas UFs configuradas e retorna resumo combinado."""
+    """Consulta múltiplas UFs configuradas e retorna resumo combinado.
+
+    O throttle interno é aplicado UMA vez por ciclo (na primeira UF);
+    entre UFs damos um pequeno gap para não disparar cStat=656 da SEFAZ.
+    """
     resultado_final = {
         "fonte": "sefaz",
         "ufs_consultadas": [],
@@ -238,9 +249,14 @@ def processar_multiplas_ufs(db: Session, *, force: bool = False) -> dict:
         "total_alertas": 0,
     }
 
-    for uf in settings.ufs_consulta:
+    _check_throttle(db, force)
+    ufs = settings.ufs_consulta
+
+    for i, uf in enumerate(ufs):
+        if i > 0:
+            time.sleep(2)
         try:
-            resultado = processar(db, uf=uf, force=force)
+            resultado = processar(db, uf=uf, force=True, _skip_throttle=True)
             resultado_final["ufs_consultadas"].append(uf)
             for k, v in resultado.get("contadores", {}).items():
                 resultado_final["contadores"][f"{uf}_{k}"] = v
@@ -254,7 +270,8 @@ def processar_multiplas_ufs(db: Session, *, force: bool = False) -> dict:
 
 def manifestar_chave(db: Session, chave: str) -> dict:
     """Disparo manual de manifestação para uma chave específica."""
-    client = get_client()
+    uf_principal = settings.ufs_consulta[0] if settings.ufs_consulta else "SP"
+    client = get_client(uf_principal)
     nf = db.query(NotaFiscal).filter(NotaFiscal.chave == chave).first()
     ret = manifestar_ciencia(client, chave)
     if ret["ok"] and nf is not None:
