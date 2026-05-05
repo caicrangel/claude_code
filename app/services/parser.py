@@ -15,11 +15,11 @@ from lxml import etree
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
-# Aceita qualquer NCM da família 2710.19 (óleos diesel e congêneres) +
-# fallback por palavra-chave na descrição. Mantenha permissivo: a cota é
-# crítica e é melhor falso-positivo que falso-negativo.
+# NCM 2710.19xx = óleos diesel (todos os tipos/aditivos).
+# Exigir "DIESEL" na descrição + NCM válido para evitar falsos-positivos.
+# S10, S500, B-S10 são variantes de diesel (comum em descrições).
 NCM_DIESEL_PREFIXES = ("271019",)
-DIESEL_KEYWORDS = ("DIESEL", "S10", "S500", "B S10", "B-S10")
+DIESEL_MODELS = ("S10", "S500", "B-S10", "B S10")  # variantes comuns de diesel
 
 
 @dataclass
@@ -46,14 +46,12 @@ class NFeParsed:
 
     @property
     def litros_diesel(self) -> Decimal:
-        # Considera apenas itens com unidade comercial em litros (LT/L/LITRO).
+        # Soma apenas itens com unidade de volume reconhecida (litros).
+        # Ignora itens em kg, m³, etc — precisam ser litros explícitos.
         total = Decimal("0")
         for it in self.itens_diesel:
             unit = it.unidade.upper().strip()
             if unit in ("LT", "L", "LITRO", "LITROS"):
-                total += it.quantidade
-            else:
-                # Fallback: se NCM bate, soma mesmo sem unidade explícita
                 total += it.quantidade
         return total
 
@@ -96,10 +94,11 @@ def parse_nfe(xml: bytes) -> NFeParsed | None:
         qcom = Decimal(prod.findtext("nfe:qCom", "0", NS) or "0")
         vprod = Decimal(prod.findtext("nfe:vProd", "0", NS) or "0")
 
-        is_diesel = (
-            any(ncm.startswith(p) for p in NCM_DIESEL_PREFIXES)
-            or any(k in desc.upper() for k in DIESEL_KEYWORDS)
-        )
+        desc_upper = desc.upper()
+        has_diesel_word = "DIESEL" in desc_upper
+        has_diesel_ncm = any(ncm.startswith(p) for p in NCM_DIESEL_PREFIXES)
+        is_diesel = has_diesel_word and has_diesel_ncm
+
         if not is_diesel:
             continue
         itens.append(ItemDiesel(
