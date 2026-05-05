@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     SEFAZ_AMBIENTE: int = 1
     SEFAZ_UF: str = "SP"
 
-    POLL_INTERVAL: int = 900
+    POLL_INTERVAL: int = 86400     # 1x ao dia (diesel não é comprado o tempo todo)
     MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)
 
     # Localização
