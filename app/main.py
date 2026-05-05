@@ -143,7 +143,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
     bloqueio = status_bloqueio_656(db)
     ultima_sync = ultima_sincronizacao(db)
-    poll_label = _formatar_intervalo(settings.POLL_INTERVAL)
+    poll_label = f"diariamente às {settings.SYNC_HORA:02d}:00 ({settings.TZ})"
     return render("dashboard.html", request, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,

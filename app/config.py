@@ -30,8 +30,9 @@ class Settings(BaseSettings):
     SEFAZ_AMBIENTE: int = 1
     SEFAZ_UF: str = "SP"
 
-    POLL_INTERVAL: int = 86400     # 1x ao dia (diesel não é comprado o tempo todo)
+    POLL_INTERVAL: int = 86400     # mantido para compatibilidade (não usado quando SYNC_HORA definida)
     MIN_SEFAZ_INTERVAL: int = 60   # seg. mínimos entre consultas (anti-throttle 656)
+    SYNC_HORA: int = 6             # hora fixa de sincronização diária (0-23, fuso TZ)
 
     # Localização
     TZ: str = "America/Sao_Paulo"

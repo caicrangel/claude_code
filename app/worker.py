@@ -1,8 +1,9 @@
-"""Worker APScheduler que roda o polling SEFAZ periodicamente."""
+"""Worker APScheduler que roda o polling SEFAZ uma vez ao dia em horário fixo."""
 import logging
 import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from .config import settings
 from .database import SessionLocal, run_migrations
@@ -28,11 +29,13 @@ def tick():
 
 def main():
     run_migrations()
-    sched = BlockingScheduler(timezone="UTC")
-    sched.add_job(tick, "interval", seconds=settings.POLL_INTERVAL)
-    log.info("Worker iniciado, intervalo=%ss", settings.POLL_INTERVAL)
+    sched = BlockingScheduler(timezone=settings.TZ)
+    trigger = CronTrigger(hour=settings.SYNC_HORA, minute=0, timezone=settings.TZ)
+    sched.add_job(tick, trigger)
+    log.info("Worker iniciado — sincronização diária às %02d:00 (%s)",
+             settings.SYNC_HORA, settings.TZ)
     time.sleep(5)
-    tick()
+    tick()   # roda uma vez imediatamente ao subir o container
     sched.start()
 
 
