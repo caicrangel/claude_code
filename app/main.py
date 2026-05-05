@@ -289,24 +289,6 @@ def config_get(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/configuracao/atualizar", dependencies=[Depends(require_login)])
-def config_atualizar(
-    nome: str = Form(""),
-    inicio: str = Form(...),
-    fim: str = Form(...),
-    cota_litros: float = Form(...),
-    db: Session = Depends(get_db),
-):
-    periodo_svc.atualizar_ativo(
-        db,
-        nome=nome or "Período",
-        inicio=date.fromisoformat(inicio),
-        fim=date.fromisoformat(fim),
-        cota_litros=Decimal(str(cota_litros)),
-    )
-    return RedirectResponse("/configuracao?msg=Periodo+atualizado", status_code=303)
-
-
 @app.post("/configuracao/novo", dependencies=[Depends(require_login)])
 def config_novo(
     nome: str = Form(""),

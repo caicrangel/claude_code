@@ -21,20 +21,6 @@ def listar(db: Session) -> list[CotaPeriodo]:
     return db.query(CotaPeriodo).order_by(CotaPeriodo.inicio.desc()).all()
 
 
-def atualizar_ativo(db: Session, *, nome: str, inicio: date, fim: date,
-                    cota_litros: Decimal) -> CotaPeriodo:
-    p = get_periodo_ativo(db)
-    if p is None:
-        return novo_periodo(db, nome=nome, inicio=inicio, fim=fim, cota_litros=cota_litros)
-    p.nome = nome
-    p.inicio = inicio
-    p.fim = fim
-    p.cota_litros = cota_litros
-    db.commit()
-    db.refresh(p)
-    return p
-
-
 def novo_periodo(db: Session, *, nome: str, inicio: date, fim: date,
                  cota_litros: Decimal) -> CotaPeriodo:
     """Encerra o período ativo (se houver) e cria um novo já ativo.

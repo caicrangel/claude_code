@@ -7,16 +7,14 @@
 
   <section>
     <h2>Período ativo</h2>
-    <p class="muted">As notas continuam guardadas no banco mesmo após mudar o período.
-       Para preservar histórico antigo, prefira "criar novo período" em vez de editar o atual.</p>
     {% if periodo_ativo %}
-      <form method="post" action="/configuracao/atualizar" class="grid">
-        <label>Nome <input name="nome" value="{{ periodo_ativo.nome or '' }}" placeholder="ex: Sem 2026/1"></label>
-        <label>Início <input name="inicio" type="date" value="{{ periodo_ativo.inicio.isoformat() }}" required></label>
-        <label>Fim <input name="fim" type="date" value="{{ periodo_ativo.fim.isoformat() }}" required></label>
-        <label>Cota (L) <input name="cota_litros" type="number" step="0.001" value="{{ periodo_ativo.cota_litros }}" required></label>
-        <button type="submit">Salvar alterações</button>
-      </form>
+      <p class="muted">
+        <strong>{{ periodo_ativo.nome or '—' }}</strong> ·
+        {{ periodo_ativo.inicio|data_curta }} → {{ periodo_ativo.fim|data_curta }} ·
+        cota <strong>{{ periodo_ativo.cota_litros|inteiro }} L</strong>
+      </p>
+      <p class="muted">Para alterar a cota ou as datas, crie um novo período abaixo. Isso preserva o histórico
+         do período atual e mantém todas as NFs já armazenadas acessíveis via Relatórios.</p>
     {% else %}
       <p class="muted">Nenhum período ativo. Crie um abaixo.</p>
     {% endif %}
