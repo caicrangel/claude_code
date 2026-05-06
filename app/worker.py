@@ -1,9 +1,13 @@
-"""Worker APScheduler que roda o polling SEFAZ uma vez ao dia em horário fixo."""
+"""Worker APScheduler que roda o polling SEFAZ em intervalo fixo.
+
+Quando há bloqueio cStat=656 ativo, o tick é silenciosamente ignorado
+(ver TooSoonError em ingest._check_throttle). O bloqueio usa backoff
+exponencial para evitar renovar a cada hora.
+"""
 import logging
 import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from .config import settings
 from .database import SessionLocal, run_migrations
@@ -30,12 +34,11 @@ def tick():
 def main():
     run_migrations()
     sched = BlockingScheduler(timezone=settings.TZ)
-    trigger = CronTrigger(hour=settings.SYNC_HORA, minute=0, timezone=settings.TZ)
-    sched.add_job(tick, trigger)
-    log.info("Worker iniciado — sincronização diária às %02d:00 (%s)",
-             settings.SYNC_HORA, settings.TZ)
+    sched.add_job(tick, "interval", hours=settings.SYNC_INTERVALO_HORAS)
+    log.info("Worker iniciado — sincronização a cada %dh (%s)",
+             settings.SYNC_INTERVALO_HORAS, settings.TZ)
     time.sleep(5)
-    tick()   # roda uma vez imediatamente ao subir o container
+    tick()
     sched.start()
 
 

@@ -143,22 +143,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
     bloqueio = status_bloqueio_656(db)
     ultima_sync = ultima_sincronizacao(db)
-    poll_label = f"diariamente às {settings.SYNC_HORA:02d}:00 ({settings.TZ})"
+    h = settings.SYNC_INTERVALO_HORAS
+    poll_label = "a cada hora" if h == 1 else f"a cada {h} horas"
     return render("dashboard.html", request, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
                   poll_label=poll_label)
-
-
-def _formatar_intervalo(segundos: int) -> str:
-    if segundos >= 86400:
-        dias = segundos // 86400
-        return "1x ao dia" if dias == 1 else f"a cada {dias} dias"
-    if segundos >= 3600:
-        horas = segundos // 3600
-        return f"a cada {horas}h"
-    minutos = max(1, segundos // 60)
-    return f"a cada {minutos} minuto(s)"
 
 
 def _parse_date(v: str | None, default: date) -> date:

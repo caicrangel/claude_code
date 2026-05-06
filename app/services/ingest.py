@@ -34,7 +34,9 @@ NSU_KEY = "ultimo_nsu"
 LAST_CALL_KEY = "ultima_consulta_em"
 LAST_OK_KEY = "ultima_consulta_ok_em"
 BLOQUEIO_656_KEY = "bloqueio_656_ate"
-BLOQUEIO_656_SEGUNDOS = 3600  # 1h após cStat=656
+BLOQUEIO_656_COUNT_KEY = "bloqueio_656_count"
+BLOQUEIO_656_BASE_SEGUNDOS = 3600     # 1h base
+BLOQUEIO_656_MAX_SEGUNDOS = 24 * 3600  # 24h teto (backoff exponencial)
 
 
 class TooSoonError(RuntimeError):
@@ -77,9 +79,27 @@ def _check_throttle(db: Session, force: bool) -> None:
 
 
 def _registrar_bloqueio_656(db: Session) -> None:
-    ate = datetime.now(timezone.utc) + timedelta(seconds=BLOQUEIO_656_SEGUNDOS)
+    """Registra bloqueio com backoff exponencial.
+    1ª ocorrência = 1h, 2ª = 2h, 3ª = 4h, ... até teto de 24h.
+    O contador zera quando uma consulta termina sem 656.
+    """
+    raw = get_state(db, BLOQUEIO_656_COUNT_KEY, "0")
+    try:
+        count = int(raw)
+    except ValueError:
+        count = 0
+    count += 1
+    set_state(db, BLOQUEIO_656_COUNT_KEY, str(count))
+    segundos = min(BLOQUEIO_656_MAX_SEGUNDOS,
+                   BLOQUEIO_656_BASE_SEGUNDOS * (2 ** (count - 1)))
+    ate = datetime.now(timezone.utc) + timedelta(seconds=segundos)
     set_state(db, BLOQUEIO_656_KEY, ate.isoformat())
-    log.warning("Bloqueio cStat=656 ativado até %s (1h)", ate.isoformat())
+    log.warning("Bloqueio cStat=656 #%d ativado por %ds (até %s)",
+                count, segundos, ate.isoformat())
+
+
+def _resetar_contador_656(db: Session) -> None:
+    set_state(db, BLOQUEIO_656_COUNT_KEY, "0")
 
 
 def status_bloqueio_656(db: Session) -> dict | None:
@@ -230,6 +250,7 @@ def processar(db: Session, *, force: bool = False) -> dict:
 
     if not bloqueado:
         set_state(db, LAST_OK_KEY, datetime.now(timezone.utc).isoformat())
+        _resetar_contador_656(db)
         db.commit()
 
     resumo = avaliar_e_alertar(db)
