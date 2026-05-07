@@ -41,6 +41,8 @@
       <span>Notas no período: <strong>{{ total_notas|inteiro }}</strong></span>
       <span class="sep">·</span>
       <span>Canceladas: <strong>{{ canceladas|inteiro }}</strong></span>
+      <span class="sep">·</span>
+      <span>Excluídas da cota: <strong>{{ excluidas|inteiro }}</strong></span>
     </div>
 
     <p class="muted sync-info">
@@ -53,26 +55,37 @@
     <table>
       <thead>
         <tr>
-          <th>Emissão</th><th>Chave</th><th>Emitente</th>
+          <th>Emissão</th><th>Emitente</th><th>Natureza da operação</th>
           <th class="num">Litros</th><th class="num">Valor</th>
-          <th>Status</th>
+          <th>Status</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for n in notas %}
-          <tr class="{% if n.cancelada %}row-cancelada{% endif %}">
+          <tr class="{% if n.cancelada %}row-cancelada{% elif n.excluida_cota %}row-excluida{% endif %}">
             <td>{{ n.data_emissao|data }}</td>
-            <td class="mono">{{ n.chave }}</td>
             <td>{{ n.emitente_nome }}</td>
+            <td class="muted">{{ n.natureza_operacao or '—' }}</td>
             <td class="num">{{ n.litros_diesel|litros }}</td>
             <td class="num">{{ n.valor_total|moeda }}</td>
             <td>
               {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
-              {% else %}<span class="tag tag-ok">ativa</span>{% endif %}
+              {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
+              {% else %}<span class="tag tag-ok">na cota</span>{% endif %}
+            </td>
+            <td>
+              {% if not n.cancelada %}
+                <form method="post" action="/notas/{{ n.id }}/toggle-cota" style="display:inline"
+                      onsubmit="return confirm({% if n.excluida_cota %}'Incluir esta NF de volta no cálculo da cota?\n\n{{ n.litros_diesel|litros }} serão SOMADOS ao consumo.'{% else %}'Excluir esta NF do cálculo da cota?\n\nNatureza: {{ n.natureza_operacao or '—' }}\nLitros: {{ n.litros_diesel|litros }}\n\nA NF continua no histórico, apenas não conta no consumo.'{% endif %});">
+                  <button type="submit" class="btn-mini">
+                    {% if n.excluida_cota %}↩ incluir na cota{% else %}✕ excluir da cota{% endif %}
+                  </button>
+                </form>
+              {% endif %}
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="6" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
+          <tr><td colspan="7" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
         {% endfor %}
       </tbody>
     </table>

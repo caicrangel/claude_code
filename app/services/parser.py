@@ -41,6 +41,7 @@ class NFeParsed:
     dest_cnpj: str
     data_emissao: datetime | None
     valor_total: Decimal
+    natureza_operacao: str
     itens_diesel: list[ItemDiesel]
 
     @property
@@ -70,6 +71,7 @@ def parse_nfe(xml: bytes) -> NFeParsed | None:
 
     numero = ide.findtext("nfe:nNF", "", NS) if ide is not None else ""
     serie = ide.findtext("nfe:serie", "", NS) if ide is not None else ""
+    nat_op = ide.findtext("nfe:natOp", "", NS).strip() if ide is not None else ""
     dh = ide.findtext("nfe:dhEmi", "", NS) if ide is not None else ""
     try:
         data_emissao = datetime.fromisoformat(dh) if dh else None
@@ -109,6 +111,7 @@ def parse_nfe(xml: bytes) -> NFeParsed | None:
         chave=chave, numero=numero, serie=serie,
         emit_cnpj=emit_cnpj, emit_nome=emit_nome, dest_cnpj=dest_cnpj,
         data_emissao=data_emissao, valor_total=valor_total,
+        natureza_operacao=nat_op,
         itens_diesel=itens,
     )
 

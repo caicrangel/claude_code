@@ -222,6 +222,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .row-pendente td { background: rgba(245, 158, 11, 0.05); }
 .row-cancelada td { background: rgba(239, 68, 68, 0.05); text-decoration: line-through;
                     text-decoration-color: var(--crit); }
+.row-excluida td { background: rgba(245, 158, 11, 0.07); opacity: 0.85; }
 .btn-mini {
   display: inline-block; font-size: 0.75rem; padding: 0.25rem 0.55rem;
   border-radius: 5px; background: var(--panel-soft); color: var(--text);

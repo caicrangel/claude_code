@@ -30,6 +30,7 @@ def litros_consumidos(db: Session, *, inicio: date | None = None,
             NotaFiscal.data_emissao <= fim,
             NotaFiscal.is_resumo.is_(False),
             NotaFiscal.cancelada.is_(False),
+            NotaFiscal.excluida_cota.is_(False),
         )
         .scalar()
     )

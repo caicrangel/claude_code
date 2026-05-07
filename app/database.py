@@ -22,6 +22,8 @@ _MIGRATIONS = [
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS manifestada BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS cancelada BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
+    "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS natureza_operacao VARCHAR(200)",
+    "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS excluida_cota BOOLEAN NOT NULL DEFAULT FALSE",
     "CREATE INDEX IF NOT EXISTS ix_notas_nsu ON notas_fiscais(nsu)",
     # Consolida NSUs antigos (multi-UF) no NSU único (single-UF)
     """

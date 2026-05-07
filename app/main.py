@@ -115,9 +115,18 @@ def _kpis(db: Session, p: CotaPeriodo, inicio: date | None = None,
             NotaFiscal.cancelada.is_(True),
         ).count()
     )
+    excluidas = (
+        db.query(NotaFiscal)
+        .filter(
+            NotaFiscal.data_emissao >= inicio,
+            NotaFiscal.data_emissao <= fim,
+            NotaFiscal.cancelada.is_(False),
+            NotaFiscal.excluida_cota.is_(True),
+        ).count()
+    )
     return {
         "consumo": consumo, "cota": cota, "pct": pct, "restante": restante,
-        "status": status, "canceladas": canceladas,
+        "status": status, "canceladas": canceladas, "excluidas": excluidas,
         "inicio": inicio, "fim": fim, "periodo": p,
     }
 
@@ -186,6 +195,7 @@ def relatorios(
     base = db.query(NotaFiscal).filter(
         NotaFiscal.data_emissao >= ini, NotaFiscal.data_emissao <= fim_d,
         NotaFiscal.is_resumo.is_(False), NotaFiscal.cancelada.is_(False),
+        NotaFiscal.excluida_cota.is_(False),
     )
 
     fornecedores = (
@@ -301,4 +311,14 @@ def config_novo(
 def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
     periodo_svc.ativar(db, periodo_id)
     return RedirectResponse("/configuracao?msg=Periodo+ativado", status_code=303)
+
+
+@app.post("/notas/{nota_id}/toggle-cota", dependencies=[Depends(require_login)])
+def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
+    """Alterna o flag excluida_cota de uma NF (override manual)."""
+    nf = db.get(NotaFiscal, nota_id)
+    if nf is not None:
+        nf.excluida_cota = not nf.excluida_cota
+        db.commit()
+    return RedirectResponse("/dashboard", status_code=303)
 

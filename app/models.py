@@ -38,10 +38,15 @@ class NotaFiscal(Base):
     litros_diesel = Column(Numeric(14, 3), default=0)
     ncm = Column(String(8))
     cfop = Column(String(4))
+    natureza_operacao = Column(String(200))
     xml = Column(Text)
     # Status:
     is_resumo = Column(Boolean, default=False, nullable=False)
     cancelada = Column(Boolean, default=False, nullable=False)
+    # Se True, a NF não conta no consumo (ex.: diferença de preço, devolução,
+    # bonificação). Pode ser definido automaticamente pela natureza_operacao
+    # ou alternado manualmente pelo usuário.
+    excluida_cota = Column(Boolean, default=False, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

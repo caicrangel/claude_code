@@ -38,6 +38,30 @@ BLOQUEIO_656_COUNT_KEY = "bloqueio_656_count"
 BLOQUEIO_656_BASE_SEGUNDOS = 3600     # 1h base
 BLOQUEIO_656_MAX_SEGUNDOS = 24 * 3600  # 24h teto (backoff exponencial)
 
+# Naturezas de operação que NÃO representam venda efetiva de combustível.
+# Quando detectadas, a NF é automaticamente excluída do cálculo da cota
+# (o usuário pode reverter manualmente pelo dashboard).
+NATUREZAS_NAO_VENDA = (
+    "DIF PRECO", "DIF. PRECO", "DIFERENCA DE PRECO", "DIFERENÇA DE PREÇO",
+    "DEVOLUCAO", "DEVOLUÇÃO",
+    "REMESSA",
+    "BONIFICAC", "BONIFICAÇ",
+    "AJUSTE",
+    "TRANSFERENCIA", "TRANSFERÊNCIA",
+    "DEMONSTRA",
+    "COMODATO",
+    "RETORNO",
+    "AMOSTRA",
+)
+
+
+def _e_nao_venda(natureza: str) -> bool:
+    """Heurística: True quando a natureza_operacao indica algo diferente de venda."""
+    if not natureza:
+        return False
+    up = natureza.upper()
+    return any(p in up for p in NATUREZAS_NAO_VENDA)
+
 
 class TooSoonError(RuntimeError):
     def __init__(self, segundos_restantes: int):
@@ -144,7 +168,8 @@ def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
         return "ignorado-sem-diesel"
 
     nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
-    if nf is None:
+    nova = nf is None
+    if nova:
         nf = NotaFiscal(chave=parsed.chave)
         db.add(nf)
 
@@ -158,8 +183,15 @@ def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
     nf.litros_diesel = parsed.litros_diesel
     nf.ncm = parsed.itens_diesel[0].ncm
     nf.cfop = parsed.itens_diesel[0].cfop
+    nf.natureza_operacao = parsed.natureza_operacao
     nf.xml = doc.xml.decode("utf-8", errors="replace")
     nf.is_resumo = False
+    # Auto-detect: marca como excluída se a natureza não for venda. Só aplica
+    # em NFs novas para preservar overrides manuais do usuário em re-ingestões.
+    if nova:
+        nf.excluida_cota = _e_nao_venda(parsed.natureza_operacao)
+        if nf.excluida_cota:
+            return "nfe-diesel-nao-venda"
     return "nfe-diesel"
 
 
