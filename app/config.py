@@ -37,8 +37,14 @@ class Settings(BaseSettings):
     TZ: str = "America/Sao_Paulo"
 
     # Logo - URL completa OU caminho relativo a /static (ex: "empresa.png").
-    # Vazio = mostra só o ícone padrão.
+    # Vazio = mostra só o nome da empresa.
+    # EMPRESA_LOGO é o fallback usado quando a versão específica do tema
+    # (LIGHT/DARK) não está configurada. Para alternância automática:
+    #   - EMPRESA_LOGO_LIGHT: logo usada no tema claro (geralmente versão escura)
+    #   - EMPRESA_LOGO_DARK:  logo usada no tema escuro (geralmente versão clara)
     EMPRESA_LOGO: str = ""
+    EMPRESA_LOGO_LIGHT: str = ""
+    EMPRESA_LOGO_DARK: str = ""
 
     # SMTP
     SMTP_HOST: str = ""

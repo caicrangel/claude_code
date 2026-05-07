@@ -2,7 +2,10 @@
 {% block title %}Login{% endblock %}
 {% block content %}
 <div class="login-card">
-  {% if logo_url %}<img src="{{ logo_url }}" class="login-logo" alt="{{ empresa_nome }}">{% endif %}
+  {% if logo_urls and (logo_urls.light or logo_urls.dark) %}
+    {% if logo_urls.light %}<img src="{{ logo_urls.light }}" class="login-logo logo-light" alt="{{ empresa_nome }}">{% endif %}
+    {% if logo_urls.dark %}<img src="{{ logo_urls.dark }}" class="login-logo logo-dark" alt="{{ empresa_nome }}">{% endif %}
+  {% elif logo_url %}<img src="{{ logo_url }}" class="login-logo" alt="{{ empresa_nome }}">{% endif %}
   <h1>{{ empresa_nome or 'Cota Diesel' }}</h1>
   <p class="muted login-sub">Acesso ao painel</p>
   {% if erro %}<div class="erro">{{ erro }}</div>{% endif %}

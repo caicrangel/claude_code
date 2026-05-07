@@ -87,6 +87,8 @@ h2 { margin: 1.5rem 0 0.6rem; font-size: 1.15rem; }
 .theme-toggle:hover { border-color: var(--accent); }
 :root[data-theme="dark"] .theme-light { display: none; }
 :root[data-theme="light"] .theme-dark { display: none; }
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="light"] .logo-dark { display: none; }
 
 main { padding: 1.5rem 2rem 3rem; max-width: 1400px; margin: 0 auto; }
 

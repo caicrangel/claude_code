@@ -37,13 +37,27 @@ fmt.register(templates.env)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
-def _logo_url() -> str | None:
-    v = (settings.EMPRESA_LOGO or "").strip()
+def _resolve_logo(value: str) -> str | None:
+    v = (value or "").strip()
     if not v:
         return None
     if v.startswith(("http://", "https://", "/")):
         return v
     return "/static/" + v
+
+
+def _logo_url() -> str | None:
+    return _resolve_logo(settings.EMPRESA_LOGO)
+
+
+def _logo_urls() -> dict[str, str | None]:
+    """Logos para alternância de tema. Cada tema usa a logo específica
+    se configurada; senão cai no EMPRESA_LOGO genérico."""
+    fallback = _resolve_logo(settings.EMPRESA_LOGO)
+    return {
+        "light": _resolve_logo(settings.EMPRESA_LOGO_LIGHT) or fallback,
+        "dark": _resolve_logo(settings.EMPRESA_LOGO_DARK) or fallback,
+    }
 
 
 # Contexto disponível em todas as páginas
@@ -57,6 +71,7 @@ async def globals_middleware(request: Request, call_next):
 def render(template: str, request: Request, **ctx):
     ctx.setdefault("settings", settings)
     ctx.setdefault("logo_url", _logo_url())
+    ctx.setdefault("logo_urls", _logo_urls())
     ctx.setdefault("empresa_nome", settings.EMPRESA_NOME)
     return templates.TemplateResponse(template, {"request": request, **ctx})
 
