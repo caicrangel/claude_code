@@ -49,7 +49,6 @@
     <p class="muted sync-info">
       Sincronização automática <strong>{{ poll_label }}</strong> via worker em background.
       Apenas NFe com NCM 2710.19 (óleo diesel) são armazenadas.
-      A manifestação de notas é feita externamente pela contabilidade.
     </p>
 
     <div class="upload-box">
@@ -73,7 +72,7 @@
         <tr>
           <th>Emissão</th><th>Emitente</th><th>Natureza da operação</th>
           <th class="num">Litros</th><th class="num">Valor</th>
-          <th>Status</th><th></th>
+          <th class="center">Status</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -84,12 +83,12 @@
             <td class="muted">{{ n.natureza_operacao or '—' }}</td>
             <td class="num">{{ n.litros_diesel|litros }}</td>
             <td class="num">{{ n.valor_total|moeda }}</td>
-            <td>
+            <td class="center">
               {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
               {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
               {% else %}<span class="tag tag-ok">na cota</span>{% endif %}
             </td>
-            <td>
+            <td class="acoes">
               {% if not n.cancelada %}
                 <form method="post" action="/notas/{{ n.id }}/toggle-cota" style="display:inline"
                       onsubmit="return confirm({% if n.excluida_cota %}'Incluir esta NF de volta no cálculo da cota?\n\n{{ n.litros_diesel|litros }} serão SOMADOS ao consumo.'{% else %}'Excluir esta NF do cálculo da cota?\n\nNatureza: {{ n.natureza_operacao or '—' }}\nLitros: {{ n.litros_diesel|litros }}\n\nA NF continua no histórico, apenas não conta no consumo.'{% endif %});">
@@ -98,6 +97,10 @@
                   </button>
                 </form>
               {% endif %}
+              <form method="post" action="/notas/{{ n.id }}/excluir" style="display:inline"
+                    onsubmit="return confirm('ATENÇÃO: excluir DEFINITIVAMENTE esta NF do sistema?\n\nEmitente: {{ n.emitente_nome }}\nLitros: {{ n.litros_diesel|litros }}\nValor: {{ n.valor_total|moeda }}\n\nUse só em caso de inserção por engano. Esta ação NÃO pode ser desfeita.');">
+                <button type="submit" class="btn-mini btn-danger" title="Excluir NF do sistema">🗑</button>
+              </form>
             </td>
           </tr>
         {% else %}

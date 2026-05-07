@@ -328,6 +328,18 @@ def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/dashboard", status_code=303)
 
 
+@app.post("/notas/{nota_id}/excluir", dependencies=[Depends(require_login)])
+def excluir_nota(nota_id: int, db: Session = Depends(get_db)):
+    """Remove DEFINITIVAMENTE uma NF do sistema. Para corrigir inserções
+    incorretas (upload manual errado, NFe que não deveria estar aqui).
+    Atenção: a NFe pode voltar via SEFAZ se ainda estiver na faixa de NSU."""
+    nf = db.get(NotaFiscal, nota_id)
+    if nf is not None:
+        db.delete(nf)
+        db.commit()
+    return RedirectResponse("/dashboard", status_code=303)
+
+
 @app.post("/notas/upload", dependencies=[Depends(require_login)])
 async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_db)):
     """Upload manual de XML de NFe (para casos que a SEFAZ não trouxe ou

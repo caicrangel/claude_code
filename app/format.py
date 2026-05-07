@@ -17,7 +17,7 @@ def _ptbr(num: str) -> str:
 def fmt_litros(v) -> str:
     if v is None:
         return "—"
-    return _ptbr(f"{Decimal(str(v)):,.3f}") + " L"
+    return _ptbr(f"{Decimal(str(v)):,.2f}") + " L"
 
 
 def fmt_litros_curto(v) -> str:

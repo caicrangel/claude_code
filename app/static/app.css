@@ -237,6 +237,15 @@ th {
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.75rem;
 }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.center, th.center { text-align: center; }
+td.acoes { white-space: nowrap; }
+td.acoes form { display: inline-block; margin-right: 0.25rem; }
+td.acoes form:last-child { margin-right: 0; }
+.btn-danger {
+  color: var(--crit); border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.08);
+}
+.btn-danger:hover { background: rgba(239, 68, 68, 0.18); border-color: var(--crit); }
 .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 0.78rem; }
 
 /* === Status / linhas / botões === */
