@@ -156,6 +156,59 @@ def ultima_sincronizacao(db: Session) -> datetime | None:
         return None
 
 
+# ---------- upload manual ----------
+
+class UploadInvalido(ValueError):
+    pass
+
+
+def importar_xml_manual(db: Session, xml_bytes: bytes) -> dict:
+    """Importa uma NFe enviada manualmente pelo usuário.
+
+    Reutiliza o parser e as regras de filtro/auto-detecção. Se a chave já
+    existe no banco, atualiza os metadados (sem sobrescrever excluida_cota).
+    Retorna dicionário com {acao, chave, litros, natureza}.
+    """
+    parsed = parse_nfe(xml_bytes)
+    if parsed is None:
+        raise UploadInvalido("XML inválido ou não é uma NFe completa.")
+    if not parsed.itens_diesel:
+        raise UploadInvalido(
+            "A NFe não contém itens de diesel (NCM 271019 + descrição com 'DIESEL'). "
+            "Apenas NFe de diesel são aceitas."
+        )
+
+    nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
+    nova = nf is None
+    if nova:
+        nf = NotaFiscal(chave=parsed.chave)
+        db.add(nf)
+
+    nf.nsu = nf.nsu or "manual"
+    nf.numero = parsed.numero
+    nf.serie = parsed.serie
+    nf.emitente_cnpj = parsed.emit_cnpj
+    nf.emitente_nome = parsed.emit_nome
+    nf.data_emissao = parsed.data_emissao
+    nf.valor_total = parsed.valor_total
+    nf.litros_diesel = parsed.litros_diesel
+    nf.ncm = parsed.itens_diesel[0].ncm
+    nf.cfop = parsed.itens_diesel[0].cfop
+    nf.natureza_operacao = parsed.natureza_operacao
+    nf.xml = xml_bytes.decode("utf-8", errors="replace")
+    nf.is_resumo = False
+    if nova:
+        nf.excluida_cota = _e_nao_venda(parsed.natureza_operacao)
+    db.commit()
+    return {
+        "acao": "criada" if nova else "atualizada",
+        "chave": parsed.chave,
+        "litros": float(parsed.litros_diesel),
+        "natureza": parsed.natureza_operacao,
+        "excluida_cota": nf.excluida_cota,
+    }
+
+
 # ---------- aplicação de cada tipo de docZip ----------
 
 def _aplicar_nfe(db: Session, doc: DocDFe) -> str:

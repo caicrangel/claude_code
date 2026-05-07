@@ -51,6 +51,21 @@
       A manifestação de notas é feita externamente pela contabilidade.
     </p>
 
+    <div class="upload-box">
+      {% if upload_ok %}<div class="sync-msg ok inline">{{ upload_ok }}</div>{% endif %}
+      {% if upload_erro %}<div class="sync-msg crit inline">{{ upload_erro }}</div>{% endif %}
+      <form method="post" action="/notas/upload" enctype="multipart/form-data" class="upload-form">
+        <label class="upload-label">
+          <strong>Upload manual de NFe</strong>
+          <span class="muted">Caso a SEFAZ não tenha trazido alguma nota — envie o XML aqui.
+            A natureza da operação será verificada e a NF entra automaticamente
+            como "na cota" ou "fora da cota". Você pode ajustar depois pelo botão.</span>
+        </label>
+        <input type="file" name="arquivo" accept=".xml" required>
+        <button type="submit">Enviar XML</button>
+      </form>
+    </div>
+
     <h2>Notas de diesel no período ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
     <table>
       <thead>

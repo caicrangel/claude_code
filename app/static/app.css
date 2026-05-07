@@ -164,8 +164,17 @@ button:hover { filter: brightness(1.05); }
 .sync-msg { font-size: 0.9rem; padding: 0.4rem 0.7rem; border-radius: 6px; }
 .sync-msg.ok   { background: rgba(34, 197, 94, 0.15);  color: var(--ok); }
 .sync-msg.warn { background: rgba(245, 158, 11, 0.15); color: var(--warn); }
-.sync-msg.err  { background: rgba(239, 68, 68, 0.15);  color: var(--crit); }
+.sync-msg.err, .sync-msg.crit { background: rgba(239, 68, 68, 0.15); color: var(--crit); }
 .sync-msg.inline { display: inline-block; margin-bottom: 1rem; }
+
+.upload-box {
+  background: var(--panel); border: 1px dashed var(--border);
+  padding: 1rem 1.2rem; border-radius: 10px; margin: 1.2rem 0;
+}
+.upload-form { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+.upload-label { display: flex; flex-direction: column; gap: 0.2rem; min-width: 240px; flex: 1; }
+.upload-label .muted { font-size: 0.82rem; }
+.upload-form input[type="file"] { padding: 0.3rem; }
 
 /* === Projeção === */
 .projecao {

@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,6 +18,8 @@ from .database import get_db, run_migrations
 from .models import CotaPeriodo, NotaFiscal
 from .services import periodo as periodo_svc
 from .services.ingest import (
+    UploadInvalido,
+    importar_xml_manual,
     status_bloqueio_656,
     ultima_sincronizacao,
 )
@@ -154,10 +156,13 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     ultima_sync = ultima_sincronizacao(db)
     h = settings.SYNC_INTERVALO_HORAS
     poll_label = "a cada hora" if h == 1 else f"a cada {h} horas"
+    upload_ok = request.query_params.get("upload_ok")
+    upload_erro = request.query_params.get("upload_erro")
     return render("dashboard.html", request, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
-                  poll_label=poll_label)
+                  poll_label=poll_label,
+                  upload_ok=upload_ok, upload_erro=upload_erro)
 
 
 def _parse_date(v: str | None, default: date) -> date:
@@ -321,4 +326,30 @@ def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
         nf.excluida_cota = not nf.excluida_cota
         db.commit()
     return RedirectResponse("/dashboard", status_code=303)
+
+
+@app.post("/notas/upload", dependencies=[Depends(require_login)])
+async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload manual de XML de NFe (para casos que a SEFAZ não trouxe ou
+    que a auto-detecção da natureza precisa ser revisada)."""
+    nome = (arquivo.filename or "").lower()
+    if not nome.endswith(".xml"):
+        return RedirectResponse(
+            "/dashboard?upload_erro=Arquivo+precisa+ter+extensao+.xml", status_code=303)
+    conteudo = await arquivo.read()
+    if len(conteudo) > 5 * 1024 * 1024:  # 5MB
+        return RedirectResponse(
+            "/dashboard?upload_erro=Arquivo+muito+grande+%28max+5MB%29", status_code=303)
+    try:
+        r = importar_xml_manual(db, conteudo)
+    except UploadInvalido as e:
+        msg = str(e).replace(" ", "+")
+        return RedirectResponse(f"/dashboard?upload_erro={msg}", status_code=303)
+    except Exception:  # noqa: BLE001
+        log.exception("Erro no upload manual de XML")
+        return RedirectResponse(
+            "/dashboard?upload_erro=Erro+ao+processar+XML", status_code=303)
+    msg = (f"NF+{r['acao']}+%28{r['litros']:.0f}+L%29"
+           + ("+marcada+como+fora+da+cota" if r["excluida_cota"] else "+incluida+na+cota"))
+    return RedirectResponse(f"/dashboard?upload_ok={msg}", status_code=303)
 
