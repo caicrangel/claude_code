@@ -23,11 +23,11 @@
     <h2>Criar novo período</h2>
     <p class="muted">Encerra o período ativo e inicia um novo. As NFs antigas continuam preservadas e
        acessíveis em <a href="/relatorios">Relatórios</a> filtrando por data ou pelo seletor de período.</p>
-    <form method="post" action="/configuracao/novo" class="grid">
+    <form method="post" action="/configuracao/novo" class="grid grid-form">
       <label>Nome <input name="nome" required placeholder="ex: Sem 2026/2"></label>
+      <label>Cota (L) <input name="cota_litros" type="number" step="0.001" required></label>
       <label>Início <input name="inicio" type="date" required></label>
       <label>Fim <input name="fim" type="date" required></label>
-      <label>Cota (L) <input name="cota_litros" type="number" step="0.001" required></label>
       <button type="submit">Criar e ativar</button>
     </form>
   </section>

@@ -279,3 +279,4 @@ td.acoes form:last-child { margin-right: 0; }
               font-size: 0.78rem; color: var(--muted); text-transform: uppercase;
               letter-spacing: 0.04em; }
 .grid button { grid-column: span 2; justify-self: start; }
+.grid-form { max-width: 720px; }
