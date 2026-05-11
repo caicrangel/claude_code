@@ -32,7 +32,7 @@ from .services.ingest import (
     status_bloqueio_656,
     ultima_sincronizacao,
 )
-from .services.quota import litros_consumidos, percentual
+from .services.quota import avaliar_e_alertar, litros_consumidos, percentual
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -480,6 +480,16 @@ def parametros_salvar(
         "/configuracao?msg=Parametros+atualizados", status_code=303)
 
 
+def _reavaliar_alertas(db: Session) -> None:
+    """Aciona o avaliador de alertas após mudança manual no consumo.
+    Idempotente — não reenvia alertas já registrados para o mesmo
+    período/threshold. Falhas são logadas e não propagam."""
+    try:
+        avaliar_e_alertar(db)
+    except Exception:  # noqa: BLE001
+        log.exception("Falha reavaliando alertas após mudança manual")
+
+
 @app.post("/notas/{nota_id}/toggle-cota", dependencies=[Depends(require_login)])
 def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
     """Alterna o flag excluida_cota de uma NF (override manual)."""
@@ -487,6 +497,7 @@ def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
     if nf is not None:
         nf.excluida_cota = not nf.excluida_cota
         db.commit()
+        _reavaliar_alertas(db)
     return RedirectResponse("/dashboard", status_code=303)
 
 
@@ -525,5 +536,6 @@ async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_
             "/dashboard?upload_erro=Erro+ao+processar+XML", status_code=303)
     msg = (f"NF+{r['acao']}+%28{r['litros']:.0f}+L%29"
            + ("+marcada+como+fora+da+cota" if r["excluida_cota"] else "+incluida+na+cota"))
+    _reavaliar_alertas(db)
     return RedirectResponse(f"/dashboard?upload_ok={msg}", status_code=303)
 
