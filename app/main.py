@@ -12,10 +12,19 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import format as fmt
-from .auth import check_credentials, require_login
+from . import runtime_config
+from .auth import (
+    ROLE_ADMIN,
+    ROLE_COMUM,
+    autenticar,
+    current_user,
+    hash_senha,
+    require_admin,
+    require_login,
+)
 from .config import settings
 from .database import get_db, run_migrations
-from .models import CotaPeriodo, NotaFiscal
+from .models import CotaPeriodo, EmailAlerta, NotaFiscal, Usuario
 from .services import periodo as periodo_svc
 from .services.ingest import (
     UploadInvalido,
@@ -37,42 +46,37 @@ fmt.register(templates.env)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
-def _resolve_logo(value: str) -> str | None:
-    v = (value or "").strip()
-    if not v:
-        return None
-    if v.startswith(("http://", "https://", "/")):
-        return v
-    return "/static/" + v
+class _SettingsView:
+    """Proxy para uso nos templates: mistura valores dinâmicos (do banco)
+    com os do .env. Permite que os templates continuem usando
+    `settings.EMPRESA_NOME`, `settings.cnpj_limpo`, etc."""
+
+    def __init__(self, db: Session) -> None:
+        self._db = db
+
+    @property
+    def EMPRESA_NOME(self) -> str:
+        return runtime_config.empresa_nome(self._db)
+
+    @property
+    def cnpj_limpo(self) -> str:
+        return runtime_config.cnpj_limpo(self._db)
+
+    def __getattr__(self, item: str):
+        # fallback transparente para os campos restantes do .env
+        return getattr(settings, item)
 
 
-def _logo_url() -> str | None:
-    return _resolve_logo(settings.EMPRESA_LOGO)
-
-
-def _logo_urls() -> dict[str, str | None]:
-    """Logos para alternância de tema. Cada tema usa a logo específica
-    se configurada; senão cai no EMPRESA_LOGO genérico."""
-    fallback = _resolve_logo(settings.EMPRESA_LOGO)
-    return {
-        "light": _resolve_logo(settings.EMPRESA_LOGO_LIGHT) or fallback,
-        "dark": _resolve_logo(settings.EMPRESA_LOGO_DARK) or fallback,
-    }
-
-
-# Contexto disponível em todas as páginas
-@app.middleware("http")
-async def globals_middleware(request: Request, call_next):
-    request.state.logo_url = _logo_url()
-    request.state.empresa_nome = settings.EMPRESA_NOME
-    return await call_next(request)
-
-
-def render(template: str, request: Request, **ctx):
-    ctx.setdefault("settings", settings)
-    ctx.setdefault("logo_url", _logo_url())
-    ctx.setdefault("logo_urls", _logo_urls())
-    ctx.setdefault("empresa_nome", settings.EMPRESA_NOME)
+def render(template: str, request: Request, db: Session, **ctx):
+    view = _SettingsView(db)
+    logos = runtime_config.logos_url(db)
+    user = current_user(request, db)
+    ctx.setdefault("settings", view)
+    ctx.setdefault("logo_urls", logos)
+    ctx.setdefault("logo_url", logos.get("dark") or logos.get("light"))
+    ctx.setdefault("empresa_nome", view.EMPRESA_NOME)
+    ctx.setdefault("current_user", user)
+    ctx.setdefault("is_admin", bool(user and user.role == ROLE_ADMIN))
     return templates.TemplateResponse(template, {"request": request, **ctx})
 
 
@@ -83,27 +87,28 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request):
-    if not request.session.get("auth"):
+    if not request.session.get("user_id"):
         return RedirectResponse("/login", status_code=303)
     return RedirectResponse("/dashboard", status_code=303)
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_get(request: Request):
-    return render("login.html", request, erro=None)
+def login_get(request: Request, db: Session = Depends(get_db)):
+    return render("login.html", request, db, erro=None)
 
 
 @app.post("/login", response_class=HTMLResponse)
-def login_post(request: Request, email: str = Form(...), senha: str = Form(...)):
-    if not check_credentials(email, senha):
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "erro": "Credenciais inválidas",
-             "logo_url": _logo_url(), "empresa_nome": settings.EMPRESA_NOME,
-             "settings": settings},
-            status_code=401,
-        )
-    request.session["auth"] = True
+def login_post(
+    request: Request,
+    email: str = Form(...),
+    senha: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = autenticar(db, email, senha)
+    if user is None:
+        return render("login.html", request, db, erro="Credenciais inválidas")
+    request.session["user_id"] = user.id
+    request.session["role"] = user.role
     return RedirectResponse("/dashboard", status_code=303)
 
 
@@ -173,7 +178,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     poll_label = "a cada hora" if h == 1 else f"a cada {h} horas"
     upload_ok = request.query_params.get("upload_ok")
     upload_erro = request.query_params.get("upload_erro")
-    return render("dashboard.html", request, **k,
+    return render("dashboard.html", request, db, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
                   poll_label=poll_label,
@@ -280,7 +285,7 @@ def relatorios(
     }
 
     return render(
-        "relatorios.html", request, **k,
+        "relatorios.html", request, db, **k,
         periodos=periodos, periodo_selecionado=sel,
         filtro_inicio=ini, filtro_fim=fim_d,
         fornecedores=fornecedores, mensal=mensal, por_ncm=por_ncm,
@@ -297,19 +302,24 @@ def relatorios(
     )
 
 
-# ---------- configuração: período de cota ----------
+# ---------- configuração (admin) ----------
 
-@app.get("/configuracao", response_class=HTMLResponse, dependencies=[Depends(require_login)])
+@app.get("/configuracao", response_class=HTMLResponse,
+         dependencies=[Depends(require_admin)])
 def config_get(request: Request, db: Session = Depends(get_db)):
     return render(
-        "configuracao.html", request,
+        "configuracao.html", request, db,
         periodo_ativo=periodo_svc.get_periodo_ativo(db),
         periodos=periodo_svc.listar(db),
+        usuarios=db.query(Usuario).order_by(Usuario.email).all(),
+        emails_alerta=db.query(EmailAlerta).order_by(EmailAlerta.email).all(),
+        params=runtime_config.snapshot(db),
         msg=request.query_params.get("msg"),
+        erro=request.query_params.get("erro"),
     )
 
 
-@app.post("/configuracao/novo", dependencies=[Depends(require_login)])
+@app.post("/configuracao/novo", dependencies=[Depends(require_admin)])
 def config_novo(
     nome: str = Form(""),
     inicio: str = Form(...),
@@ -327,10 +337,147 @@ def config_novo(
     return RedirectResponse("/configuracao?msg=Novo+periodo+criado", status_code=303)
 
 
-@app.post("/configuracao/ativar/{periodo_id}", dependencies=[Depends(require_login)])
+@app.post("/configuracao/ativar/{periodo_id}", dependencies=[Depends(require_admin)])
 def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
     periodo_svc.ativar(db, periodo_id)
     return RedirectResponse("/configuracao?msg=Periodo+ativado", status_code=303)
+
+
+# ---- usuários ----
+
+@app.post("/configuracao/usuarios/novo", dependencies=[Depends(require_admin)])
+def usuario_novo(
+    email: str = Form(...),
+    senha: str = Form(...),
+    nome: str = Form(""),
+    role: str = Form(ROLE_COMUM),
+    db: Session = Depends(get_db),
+):
+    email = (email or "").strip().lower()
+    if not email or not senha:
+        return RedirectResponse(
+            "/configuracao?erro=Email+e+senha+obrigatorios", status_code=303)
+    if role not in (ROLE_ADMIN, ROLE_COMUM):
+        role = ROLE_COMUM
+    if db.query(Usuario).filter(Usuario.email == email).first():
+        return RedirectResponse(
+            "/configuracao?erro=Email+ja+cadastrado", status_code=303)
+    db.add(Usuario(
+        email=email, senha_hash=hash_senha(senha),
+        nome=nome or None, role=role, ativo=True,
+    ))
+    db.commit()
+    return RedirectResponse("/configuracao?msg=Usuario+criado", status_code=303)
+
+
+@app.post("/configuracao/usuarios/{user_id}/excluir",
+          dependencies=[Depends(require_admin)])
+def usuario_excluir(user_id: int, request: Request, db: Session = Depends(get_db)):
+    # impede o admin logado de se excluir
+    if request.session.get("user_id") == user_id:
+        return RedirectResponse(
+            "/configuracao?erro=Nao+e+possivel+excluir+a+si+mesmo", status_code=303)
+    # impede excluir o último admin
+    u = db.get(Usuario, user_id)
+    if u is None:
+        return RedirectResponse("/configuracao", status_code=303)
+    if u.role == ROLE_ADMIN:
+        outros_admins = db.query(Usuario).filter(
+            Usuario.role == ROLE_ADMIN, Usuario.id != user_id,
+            Usuario.ativo.is_(True),
+        ).count()
+        if outros_admins == 0:
+            return RedirectResponse(
+                "/configuracao?erro=Mantenha+ao+menos+um+admin", status_code=303)
+    db.delete(u)
+    db.commit()
+    return RedirectResponse("/configuracao?msg=Usuario+excluido", status_code=303)
+
+
+@app.post("/configuracao/usuarios/{user_id}/senha",
+          dependencies=[Depends(require_admin)])
+def usuario_senha(user_id: int, senha: str = Form(...), db: Session = Depends(get_db)):
+    if not senha:
+        return RedirectResponse(
+            "/configuracao?erro=Senha+vazia", status_code=303)
+    u = db.get(Usuario, user_id)
+    if u is None:
+        return RedirectResponse("/configuracao", status_code=303)
+    u.senha_hash = hash_senha(senha)
+    db.commit()
+    return RedirectResponse("/configuracao?msg=Senha+atualizada", status_code=303)
+
+
+# ---- e-mails de alerta ----
+
+@app.post("/configuracao/emails/novo", dependencies=[Depends(require_admin)])
+def email_novo(
+    email: str = Form(...),
+    nome: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        return RedirectResponse(
+            "/configuracao?erro=Email+invalido", status_code=303)
+    if db.query(EmailAlerta).filter(EmailAlerta.email == email).first():
+        return RedirectResponse(
+            "/configuracao?erro=Email+ja+cadastrado", status_code=303)
+    db.add(EmailAlerta(email=email, nome=nome or None, ativo=True))
+    db.commit()
+    return RedirectResponse("/configuracao?msg=Email+adicionado", status_code=303)
+
+
+@app.post("/configuracao/emails/{email_id}/excluir",
+          dependencies=[Depends(require_admin)])
+def email_excluir(email_id: int, db: Session = Depends(get_db)):
+    e = db.get(EmailAlerta, email_id)
+    if e is not None:
+        db.delete(e)
+        db.commit()
+    return RedirectResponse("/configuracao?msg=Email+removido", status_code=303)
+
+
+@app.post("/configuracao/emails/{email_id}/toggle",
+          dependencies=[Depends(require_admin)])
+def email_toggle(email_id: int, db: Session = Depends(get_db)):
+    e = db.get(EmailAlerta, email_id)
+    if e is not None:
+        e.ativo = not e.ativo
+        db.commit()
+    return RedirectResponse("/configuracao?msg=Status+atualizado", status_code=303)
+
+
+# ---- parâmetros gerais ----
+
+@app.post("/configuracao/parametros", dependencies=[Depends(require_admin)])
+def parametros_salvar(
+    EMPRESA_NOME: str = Form(""),
+    EMPRESA_CNPJ: str = Form(""),
+    EMPRESA_LOGO_LIGHT: str = Form(""),
+    EMPRESA_LOGO_DARK: str = Form(""),
+    ALERT_THRESHOLDS: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    valores = {
+        "EMPRESA_NOME": EMPRESA_NOME.strip(),
+        "EMPRESA_CNPJ": EMPRESA_CNPJ.strip(),
+        "EMPRESA_LOGO_LIGHT": EMPRESA_LOGO_LIGHT.strip(),
+        "EMPRESA_LOGO_DARK": EMPRESA_LOGO_DARK.strip(),
+        "ALERT_THRESHOLDS": ALERT_THRESHOLDS.strip(),
+    }
+    # validação simples dos thresholds
+    if valores["ALERT_THRESHOLDS"]:
+        try:
+            [int(x) for x in valores["ALERT_THRESHOLDS"].split(",") if x.strip()]
+        except ValueError:
+            return RedirectResponse(
+                "/configuracao?erro=Thresholds+invalidos+%28use+numeros+separados+por+virgula%29",
+                status_code=303)
+    for chave, valor in valores.items():
+        runtime_config.set_(db, chave, valor)
+    return RedirectResponse(
+        "/configuracao?msg=Parametros+atualizados", status_code=303)
 
 
 @app.post("/notas/{nota_id}/toggle-cota", dependencies=[Depends(require_login)])

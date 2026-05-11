@@ -75,6 +75,42 @@ class State(Base):
     value = Column(String(255), nullable=False, default="")
 
 
+class Usuario(Base):
+    """Conta de acesso ao painel. role='admin' acessa configurações;
+    role='comum' acessa apenas Visão geral e Relatórios."""
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(200), nullable=False, unique=True, index=True)
+    senha_hash = Column(String(255), nullable=False)
+    nome = Column(String(120))
+    role = Column(String(20), nullable=False, default="comum")
+    ativo = Column(Boolean, nullable=False, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class EmailAlerta(Base):
+    """Destinatários dos e-mails de alerta de cota. Independente de usuários."""
+    __tablename__ = "email_alertas"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(200), nullable=False, unique=True)
+    nome = Column(String(120))
+    ativo = Column(Boolean, nullable=False, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class AppConfig(Base):
+    """Parâmetros editáveis em runtime pela tela de configuração.
+    Cai no valor do .env (Settings) quando a chave não existe aqui."""
+    __tablename__ = "app_config"
+
+    chave = Column(String(80), primary_key=True)
+    valor = Column(Text, nullable=False, default="")
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def get_state(db, key: str, default: str = "") -> str:
     row = db.get(State, key)
     return row.value if row else default

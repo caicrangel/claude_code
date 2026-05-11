@@ -46,6 +46,8 @@ def run_migrations() -> None:
         for sql in _MIGRATIONS:
             conn.execute(text(sql))
     _seed_periodo_inicial()
+    _seed_admin_inicial()
+    _seed_email_alerta_inicial()
 
 
 def _seed_periodo_inicial() -> None:
@@ -63,6 +65,48 @@ def _seed_periodo_inicial() -> None:
             cota_litros=Decimal(str(settings.COTA_LITROS)),
             ativo=True,
         ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _seed_admin_inicial() -> None:
+    """Quando a tabela usuarios está vazia, cria um admin a partir do .env
+    (AUTH_EMAIL + AUTH_PASSWORD). Permite primeiro acesso sem comando manual.
+    Após o primeiro login o admin pode gerenciar usuários pela UI."""
+    from .auth import hash_senha
+    from .models import Usuario
+    db = SessionLocal()
+    try:
+        if db.query(Usuario).count() > 0:
+            return
+        email = (settings.AUTH_EMAIL or "").strip().lower()
+        senha = settings.AUTH_PASSWORD or ""
+        if not email or not senha:
+            return
+        db.add(Usuario(
+            email=email,
+            senha_hash=hash_senha(senha),
+            nome="Administrador",
+            role="admin",
+            ativo=True,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _seed_email_alerta_inicial() -> None:
+    """Migra o EMAIL_ALERTAS do .env para a tabela na primeira execução."""
+    from .models import EmailAlerta
+    db = SessionLocal()
+    try:
+        if db.query(EmailAlerta).count() > 0:
+            return
+        email = (settings.EMAIL_ALERTAS or "").strip()
+        if not email:
+            return
+        db.add(EmailAlerta(email=email, nome="(do .env)", ativo=True))
         db.commit()
     finally:
         db.close()

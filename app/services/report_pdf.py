@@ -22,7 +22,7 @@ from matplotlib.patches import Rectangle
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..config import settings
+from .. import runtime_config
 from ..format import fmt_data_curta, fmt_inteiro, fmt_litros, fmt_moeda, fmt_pct
 from ..models import CotaPeriodo, NotaFiscal
 
@@ -69,16 +69,17 @@ def _consumo_mensal(db: Session, periodo: CotaPeriodo):
 
 # ---------- páginas do PDF ----------
 
-def _pagina_resumo(pdf: PdfPages, *, periodo: CotaPeriodo, consumo: Decimal,
-                   cota: Decimal, pct: float, restante: Decimal, threshold: int) -> None:
+def _pagina_resumo(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
+                   consumo: Decimal, cota: Decimal, pct: float, restante: Decimal,
+                   threshold: int) -> None:
     fig, ax = plt.subplots(figsize=(8.27, 11.69))  # A4 retrato
     ax.axis("off")
 
     # Título
     fig.text(0.08, 0.94, "Relatório de Cota — Diesel", fontsize=20, fontweight="bold",
              color="#0f172a")
-    fig.text(0.08, 0.905, settings.EMPRESA_NOME, fontsize=14, color="#334155")
-    fig.text(0.08, 0.885, f"CNPJ {settings.cnpj_limpo}", fontsize=10, color="#64748b")
+    fig.text(0.08, 0.905, runtime_config.empresa_nome(db), fontsize=14, color="#334155")
+    fig.text(0.08, 0.885, f"CNPJ {runtime_config.cnpj_limpo(db)}", fontsize=10, color="#64748b")
 
     # Faixa de alerta
     cor_alerta = "#dc2626" if threshold >= 100 else ("#d97706" if threshold >= 85 else "#0284c7")
@@ -200,7 +201,7 @@ def gerar_pdf_alerta(
     """Gera o PDF de alerta. Retorna bytes para anexar no e-mail."""
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        _pagina_resumo(pdf, periodo=periodo, consumo=consumo, cota=cota,
+        _pagina_resumo(pdf, db=db, periodo=periodo, consumo=consumo, cota=cota,
                        pct=pct, restante=restante, threshold=threshold)
         _pagina_graficos(pdf, db=db, periodo=periodo)
     return buf.getvalue()

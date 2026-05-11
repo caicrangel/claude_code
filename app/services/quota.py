@@ -9,9 +9,9 @@ from html import escape
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..config import settings
+from .. import runtime_config
 from ..format import fmt_data_curta, fmt_litros, fmt_pct
-from ..models import Alerta, CotaPeriodo, NotaFiscal
+from ..models import Alerta, CotaPeriodo, EmailAlerta, NotaFiscal
 from .email import send_email
 from .periodo import get_periodo_ativo
 from .report_pdf import gerar_pdf_alerta
@@ -46,10 +46,12 @@ def percentual(consumo: Decimal, cota: Decimal) -> float:
     return float((consumo / cota) * 100)
 
 
-def _montar_corpo_texto(p: CotaPeriodo, consumo: Decimal, cota: Decimal,
+def _montar_corpo_texto(db: Session, p: CotaPeriodo, consumo: Decimal, cota: Decimal,
                         pct: float, restante: Decimal, thr: int) -> str:
+    nome = runtime_config.empresa_nome(db)
+    cnpj = runtime_config.cnpj_limpo(db)
     return (
-        f"Empresa: {settings.EMPRESA_NOME} (CNPJ {settings.cnpj_limpo})\n"
+        f"Empresa: {nome} (CNPJ {cnpj})\n"
         f"Período: {fmt_data_curta(p.inicio)} a {fmt_data_curta(p.fim)}\n"
         f"Cota: {fmt_litros(cota)}\n"
         f"Consumido: {fmt_litros(consumo)} ({fmt_pct(pct)})\n"
@@ -59,13 +61,13 @@ def _montar_corpo_texto(p: CotaPeriodo, consumo: Decimal, cota: Decimal,
     )
 
 
-def _montar_corpo_html(p: CotaPeriodo, consumo: Decimal, cota: Decimal,
+def _montar_corpo_html(db: Session, p: CotaPeriodo, consumo: Decimal, cota: Decimal,
                        pct: float, restante: Decimal, thr: int) -> str:
     cor_alerta = "#dc2626" if thr >= 100 else ("#d97706" if thr >= 85 else "#0284c7")
     cor_uso = "#dc2626" if pct >= 95 else ("#d97706" if pct >= 70 else "#16a34a")
     pct_fill = min(pct, 100.0)
-    empresa = escape(settings.EMPRESA_NOME)
-    cnpj = escape(settings.cnpj_limpo)
+    empresa = escape(runtime_config.empresa_nome(db))
+    cnpj = escape(runtime_config.cnpj_limpo(db))
     return f"""\
 <!doctype html>
 <html lang="pt-br"><head><meta charset="utf-8"></head>
@@ -142,7 +144,13 @@ def avaliar_e_alertar(db: Session) -> dict:
     periodo_iso = p.inicio.isoformat()
 
     disparados: list[int] = []
-    for thr in sorted(settings.thresholds):
+    destinatarios = [
+        e.email for e in db.query(EmailAlerta)
+        .filter(EmailAlerta.ativo.is_(True)).all()
+        if (e.email or "").strip()
+    ]
+    nome_empresa = runtime_config.empresa_nome(db)
+    for thr in runtime_config.thresholds(db):
         if pct < thr:
             continue
         existe = db.query(Alerta).filter(
@@ -151,8 +159,8 @@ def avaliar_e_alertar(db: Session) -> dict:
         ).first()
         if existe:
             continue
-        msg_text = _montar_corpo_texto(p, consumo, cota, pct, restante, thr)
-        msg_html = _montar_corpo_html(p, consumo, cota, pct, restante, thr)
+        msg_text = _montar_corpo_texto(db, p, consumo, cota, pct, restante, thr)
+        msg_html = _montar_corpo_html(db, p, consumo, cota, pct, restante, thr)
         try:
             pdf_bytes = gerar_pdf_alerta(
                 db, periodo=p, consumo=consumo, cota=cota,
@@ -163,21 +171,24 @@ def avaliar_e_alertar(db: Session) -> dict:
             pdf_bytes = None
         anexos = []
         if pdf_bytes:
-            nome_pdf = (
-                f"alerta-cota-{p.inicio.isoformat()}-{thr}pct.pdf"
-            )
+            nome_pdf = f"alerta-cota-{p.inicio.isoformat()}-{thr}pct.pdf"
             anexos.append((nome_pdf, pdf_bytes, "application/pdf"))
-        ok = send_email(
-            to=settings.EMAIL_ALERTAS,
-            subject=f"[Cota Diesel] {settings.EMPRESA_NOME} atingiu {thr}%",
-            body=msg_text,
-            html_body=msg_html,
-            attachments=anexos or None,
-        )
+        ok_any = False
+        for dest in destinatarios:
+            ok = send_email(
+                to=dest,
+                subject=f"[Cota Diesel] {nome_empresa} atingiu {thr}%",
+                body=msg_text,
+                html_body=msg_html,
+                attachments=anexos or None,
+            )
+            ok_any = ok_any or ok
+        if not destinatarios:
+            log.warning("Sem destinatários ativos em email_alertas — alerta %d%% não enviado", thr)
         db.add(Alerta(
             threshold_pct=thr,
             litros_consumidos=consumo,
-            canal="email" if ok else "log",
+            canal="email" if ok_any else "log",
             mensagem=msg_text,
             periodo_inicio_iso=periodo_iso,
         ))

@@ -280,3 +280,14 @@ td.acoes form:last-child { margin-right: 0; }
               letter-spacing: 0.04em; }
 .grid button { grid-column: span 2; justify-self: start; }
 .grid-form { max-width: 720px; }
+
+/* Identificação do usuário logado no topbar */
+.topbar nav .user-info {
+  font-size: 0.85rem; padding: 0.2rem 0.5rem;
+  border-radius: 6px; background: var(--panel-soft);
+  border: 1px solid var(--border);
+}
+
+/* Configuração: separa seções */
+.page section { margin-bottom: 2rem; }
+.page section:last-child { margin-bottom: 0; }

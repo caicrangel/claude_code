@@ -3,6 +3,7 @@
 {% block content %}
 <div class="page">
   {% if msg %}<div class="sync-msg ok inline">{{ msg }}</div>{% endif %}
+  {% if erro %}<div class="sync-msg err inline">{{ erro }}</div>{% endif %}
 
   <section>
     <h2>Período ativo</h2>
@@ -55,6 +56,117 @@
           </tr>
         {% else %}
           <tr><td colspan="6" class="muted">Nenhum período cadastrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Parâmetros do sistema</h2>
+    <p class="muted">Valores aplicados imediatamente após salvar. Settings sensíveis
+       (SMTP, certificado, banco) continuam no arquivo <code>.env</code>.</p>
+    <form method="post" action="/configuracao/parametros" class="grid grid-form">
+      <label>Nome da empresa
+        <input name="EMPRESA_NOME" value="{{ params.EMPRESA_NOME }}">
+      </label>
+      <label>CNPJ
+        <input name="EMPRESA_CNPJ" value="{{ params.EMPRESA_CNPJ }}" placeholder="só dígitos">
+      </label>
+      <label>Logo (tema claro)
+        <input name="EMPRESA_LOGO_LIGHT" value="{{ params.EMPRESA_LOGO_LIGHT }}"
+               placeholder="empresa-escura.png ou URL completa">
+      </label>
+      <label>Logo (tema escuro)
+        <input name="EMPRESA_LOGO_DARK" value="{{ params.EMPRESA_LOGO_DARK }}"
+               placeholder="empresa-clara.png ou URL completa">
+      </label>
+      <label style="grid-column: span 2;">Limiares de alerta (% separados por vírgula)
+        <input name="ALERT_THRESHOLDS" value="{{ params.ALERT_THRESHOLDS }}"
+               placeholder="70,85,95,100">
+      </label>
+      <button type="submit">Salvar parâmetros</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>E-mails de alerta</h2>
+    <p class="muted">Destinatários dos alertas automáticos quando a cota atinge cada limiar.
+       Múltiplos destinatários recebem o mesmo e-mail. Desativar (sem excluir) permite pausar
+       temporariamente sem perder o cadastro.</p>
+    <form method="post" action="/configuracao/emails/novo" class="grid grid-form">
+      <label>E-mail <input name="email" type="email" required></label>
+      <label>Nome (opcional) <input name="nome" placeholder="ex: Gestor de frota"></label>
+      <button type="submit">Adicionar</button>
+    </form>
+    <table>
+      <thead><tr><th>E-mail</th><th>Nome</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for e in emails_alerta %}
+          <tr>
+            <td>{{ e.email }}</td>
+            <td>{{ e.nome or '—' }}</td>
+            <td>{% if e.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">inativo</span>{% endif %}</td>
+            <td class="acoes">
+              <form method="post" action="/configuracao/emails/{{ e.id }}/toggle">
+                <button type="submit" class="btn-mini">{% if e.ativo %}desativar{% else %}ativar{% endif %}</button>
+              </form>
+              <form method="post" action="/configuracao/emails/{{ e.id }}/excluir"
+                    onsubmit="return confirm('Remover este destinatário?');">
+                <button type="submit" class="btn-mini btn-danger">excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">Nenhum destinatário cadastrado — alertas não serão enviados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Usuários do sistema</h2>
+    <p class="muted"><strong>Administrador</strong> acessa todas as abas e gerencia configurações.
+       <strong>Comum</strong> acessa apenas Visão geral e Relatórios.</p>
+    <form method="post" action="/configuracao/usuarios/novo" class="grid grid-form">
+      <label>E-mail <input name="email" type="email" required></label>
+      <label>Senha <input name="senha" type="password" required minlength="6"></label>
+      <label>Nome (opcional) <input name="nome"></label>
+      <label>Perfil
+        <select name="role">
+          <option value="comum" selected>Comum</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </label>
+      <button type="submit">Criar usuário</button>
+    </form>
+    <table>
+      <thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for u in usuarios %}
+          <tr>
+            <td>{{ u.email }}</td>
+            <td>{{ u.nome or '—' }}</td>
+            <td>
+              {% if u.role == 'admin' %}<span class="tag tag-ok">admin</span>
+              {% else %}<span class="tag">{{ u.role }}</span>{% endif %}
+            </td>
+            <td>{% if u.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">inativo</span>{% endif %}</td>
+            <td class="acoes">
+              <form method="post" action="/configuracao/usuarios/{{ u.id }}/senha"
+                    onsubmit="var s=prompt('Nova senha (mín. 6 caracteres):'); if(!s||s.length<6){return false;} this.senha.value=s; return true;">
+                <input type="hidden" name="senha" value="">
+                <button type="submit" class="btn-mini">trocar senha</button>
+              </form>
+              {% if current_user and current_user.id != u.id %}
+                <form method="post" action="/configuracao/usuarios/{{ u.id }}/excluir"
+                      onsubmit="return confirm('Excluir usuário {{ u.email }}?');">
+                  <button type="submit" class="btn-mini btn-danger">excluir</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted">Nenhum usuário cadastrado.</td></tr>
         {% endfor %}
       </tbody>
     </table>

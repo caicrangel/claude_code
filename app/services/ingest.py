@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from .. import runtime_config
 from ..config import settings
 from ..models import NotaFiscal, get_state, set_state
 from .parser import parse_evento, parse_nfe
@@ -294,12 +295,12 @@ def processar(db: Session, *, force: bool = False) -> dict:
     Retorna dicionário com contadores e resumo de cota. Levanta TooSoonError
     se estiver dentro do throttle interno ou bloqueio cStat=656.
     """
-    if not settings.cnpj_limpo:
-        raise RuntimeError("EMPRESA_CNPJ não configurado no .env")
+    cnpj = runtime_config.cnpj_limpo(db)
+    if not cnpj:
+        raise RuntimeError("EMPRESA_CNPJ não configurado (defina via tela de Configuração ou .env)")
     _check_throttle(db, force)
 
     client = get_client()
-    cnpj = settings.cnpj_limpo
     ult_nsu = get_state(db, NSU_KEY, "0")
 
     contadores: dict[str, int] = {}

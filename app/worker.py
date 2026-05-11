@@ -9,6 +9,7 @@ import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from . import runtime_config
 from .config import settings
 from .database import SessionLocal, run_migrations
 from .services.ingest import TooSoonError, processar
@@ -21,7 +22,8 @@ def tick():
     db = SessionLocal()
     try:
         log.info("Tick: consultando SEFAZ p/ %s (%s) UF=%s",
-                 settings.EMPRESA_NOME, settings.cnpj_limpo, settings.SEFAZ_UF)
+                 runtime_config.empresa_nome(db), runtime_config.cnpj_limpo(db),
+                 settings.SEFAZ_UF)
         log.info("Resultado: %s", processar(db))
     except TooSoonError as e:
         log.info("Tick ignorado (throttle/bloqueio): %s", e)

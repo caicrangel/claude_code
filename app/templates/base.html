@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Cota Diesel{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css?v=7">
+  <link rel="stylesheet" href="/static/app.css?v=8">
   <script>
     // tema aplicado antes da pintura para evitar flash
     (function(){
@@ -43,10 +43,10 @@
       {% endif %}
     </a>
     <nav>
-      {% if request.session.get('auth') %}
+      {% if current_user %}
         <a href="/dashboard">Visão geral</a>
         <a href="/relatorios">Relatórios</a>
-        <a href="/configuracao">Configuração</a>
+        {% if is_admin %}<a href="/configuracao">Configuração</a>{% endif %}
       {% endif %}
       <button type="button" class="theme-toggle"
               onclick="toggleTheme()"
@@ -54,7 +54,8 @@
               aria-label="Alternar tema">
         <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
       </button>
-      {% if request.session.get('auth') %}
+      {% if current_user %}
+        <span class="user-info muted" title="{{ current_user.email }}">{{ current_user.nome or current_user.email }}</span>
         <a href="/logout">Sair</a>
       {% endif %}
     </nav>
