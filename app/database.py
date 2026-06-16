@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import settings
@@ -66,6 +67,9 @@ def _seed_periodo_inicial() -> None:
             ativo=True,
         ))
         db.commit()
+    except IntegrityError:
+        # Outro processo (app/worker) já semeou ao subir junto — ok.
+        db.rollback()
     finally:
         db.close()
 
@@ -92,6 +96,9 @@ def _seed_admin_inicial() -> None:
             ativo=True,
         ))
         db.commit()
+    except IntegrityError:
+        # Outro processo (app/worker) já criou o admin ao subir junto — ok.
+        db.rollback()
     finally:
         db.close()
 
@@ -108,5 +115,8 @@ def _seed_email_alerta_inicial() -> None:
             return
         db.add(EmailAlerta(email=email, nome="(do .env)", ativo=True))
         db.commit()
+    except IntegrityError:
+        # Outro processo (app/worker) já migrou o e-mail ao subir junto — ok.
+        db.rollback()
     finally:
         db.close()
