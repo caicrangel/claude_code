@@ -70,7 +70,7 @@
     <table>
       <thead>
         <tr>
-          <th>Emissão</th><th>Emitente</th><th>Natureza da operação</th>
+          <th>Emissão</th><th class="num">Nº NF</th><th>Emitente</th><th>Natureza da operação</th>
           <th class="num">Litros</th><th class="num">Valor</th>
           <th class="center">Status</th><th></th>
         </tr>
@@ -79,6 +79,7 @@
         {% for n in notas %}
           <tr class="{% if n.cancelada %}row-cancelada{% elif n.excluida_cota %}row-excluida{% endif %}">
             <td>{{ n.data_emissao|data }}</td>
+            <td class="num">{{ n.numero or '—' }}</td>
             <td>{{ n.emitente_nome }}</td>
             <td class="muted">{{ n.natureza_operacao or '—' }}</td>
             <td class="num">{{ n.litros_diesel|litros }}</td>
@@ -104,7 +105,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="7" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
+          <tr><td colspan="8" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
         {% endfor %}
       </tbody>
     </table>
