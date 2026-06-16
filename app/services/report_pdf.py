@@ -205,3 +205,81 @@ def gerar_pdf_alerta(
                        pct=pct, restante=restante, threshold=threshold)
         _pagina_graficos(pdf, db=db, periodo=periodo)
     return buf.getvalue()
+
+
+def _pagina_panorama(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
+                     mes_inicio: date, mes_fim: date,
+                     consumo_mes: Decimal, consumo_acum: Decimal,
+                     cota: Decimal, pct_acum: float, restante: Decimal) -> None:
+    """Página resumo do panorama mensal — sem faixa de alerta de limite."""
+    fig, ax = plt.subplots(figsize=(8.27, 11.69))
+    ax.axis("off")
+
+    fig.text(0.08, 0.94, "Panorama Mensal — Diesel", fontsize=20, fontweight="bold",
+             color="#0f172a")
+    fig.text(0.08, 0.905, runtime_config.empresa_nome(db), fontsize=14, color="#334155")
+    fig.text(0.08, 0.885, f"CNPJ {runtime_config.cnpj_limpo(db)}", fontsize=10, color="#64748b")
+
+    fig.patches.append(Rectangle((0.08, 0.83), 0.84, 0.035, transform=fig.transFigure,
+                                 facecolor="#0f172a", edgecolor="none"))
+    fig.text(0.5, 0.847,
+             f"Mês de referência: {fmt_data_curta(mes_inicio)} a {fmt_data_curta(mes_fim)}",
+             fontsize=13, fontweight="bold", color="white", ha="center", va="center")
+
+    y = 0.78
+    linhas = [
+        ("Período de apuração",
+         f"{fmt_data_curta(periodo.inicio)}  a  {fmt_data_curta(periodo.fim)}"),
+        ("Consumido no mês", fmt_litros(consumo_mes)),
+        ("Acumulado no período", f"{fmt_litros(consumo_acum)}  ({fmt_pct(pct_acum)})"),
+        ("Cota total", fmt_litros(cota)),
+        ("Restante", fmt_litros(restante)),
+    ]
+    for label, valor in linhas:
+        fig.text(0.08, y, label, fontsize=10, color="#64748b")
+        fig.text(0.08, y - 0.025, valor, fontsize=15, fontweight="bold", color="#0f172a")
+        y -= 0.06
+
+    gauge_x, gauge_y, gauge_w, gauge_h = 0.08, 0.36, 0.84, 0.04
+    fig.patches.append(Rectangle((gauge_x, gauge_y), gauge_w, gauge_h,
+                                 transform=fig.transFigure,
+                                 facecolor="#e2e8f0", edgecolor="#cbd5e1"))
+    pct_clamp = min(pct_acum, 100.0) / 100.0
+    cor_fill = "#dc2626" if pct_acum >= 95 else ("#d97706" if pct_acum >= 70 else "#16a34a")
+    fig.patches.append(Rectangle((gauge_x, gauge_y), gauge_w * pct_clamp, gauge_h,
+                                 transform=fig.transFigure,
+                                 facecolor=cor_fill, edgecolor="none"))
+    fig.text(0.08, gauge_y + gauge_h + 0.015, "Uso acumulado da cota",
+             fontsize=10, color="#64748b")
+    fig.text(0.92, gauge_y + gauge_h + 0.015, fmt_pct(pct_acum), fontsize=12,
+             fontweight="bold", color=cor_fill, ha="right")
+
+    fig.text(0.08, 0.04,
+             f"Relatório gerado automaticamente — {fmt_data_curta(date.today())}",
+             fontsize=8, color="#94a3b8")
+
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
+def gerar_pdf_panorama(
+    db: Session,
+    *,
+    periodo: CotaPeriodo,
+    mes_inicio: date,
+    mes_fim: date,
+    consumo_mes: Decimal,
+    consumo_acum: Decimal,
+    cota: Decimal,
+    pct_acum: float,
+    restante: Decimal,
+) -> bytes:
+    """Panorama mensal (fechamento de mês). Reaproveita os gráficos do alerta."""
+    buf = BytesIO()
+    with PdfPages(buf) as pdf:
+        _pagina_panorama(pdf, db=db, periodo=periodo,
+                         mes_inicio=mes_inicio, mes_fim=mes_fim,
+                         consumo_mes=consumo_mes, consumo_acum=consumo_acum,
+                         cota=cota, pct_acum=pct_acum, restante=restante)
+        _pagina_graficos(pdf, db=db, periodo=periodo)
+    return buf.getvalue()

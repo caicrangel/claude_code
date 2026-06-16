@@ -212,14 +212,17 @@ def importar_xml_manual(db: Session, xml_bytes: bytes) -> dict:
 
 # ---------- aplicação de cada tipo de docZip ----------
 
-def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
-    """Processa NFe completa. Só armazena se contém itens de diesel."""
+def _aplicar_nfe(db: Session, doc: DocDFe) -> tuple[str, NotaFiscal | None]:
+    """Processa NFe completa. Só armazena se contém itens de diesel.
+    Retorna (codigo, nf_se_nova) — `nf_se_nova` só vem preenchido quando a
+    NF acabou de ser criada (não em update), pra alimentar a notificação
+    agrupada de NFs novas no fim do ciclo."""
     parsed = parse_nfe(doc.xml)
     if parsed is None:
-        return "nfe-invalida"
+        return "nfe-invalida", None
 
     if not parsed.itens_diesel:
-        return "ignorado-sem-diesel"
+        return "ignorado-sem-diesel", None
 
     nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
     nova = nf is None
@@ -245,46 +248,43 @@ def _aplicar_nfe(db: Session, doc: DocDFe) -> str:
     if nova:
         nf.excluida_cota = _e_nao_venda(parsed.natureza_operacao)
         if nf.excluida_cota:
-            return "nfe-diesel-nao-venda"
-    return "nfe-diesel"
+            return "nfe-diesel-nao-venda", nf
+        return "nfe-diesel", nf
+    return "nfe-diesel", None
 
 
-def _aplicar_evento(db: Session, doc: DocDFe) -> str:
+def _aplicar_evento(db: Session, doc: DocDFe) -> tuple[str, None]:
     """Aplica eventos apenas em notas que já temos no banco (diesel)."""
     parsed = parse_evento(doc.xml)
     if parsed is None or not parsed.chave:
-        return "evento-invalido"
+        return "evento-invalido", None
     nf = db.query(NotaFiscal).filter(NotaFiscal.chave == parsed.chave).first()
     if nf is None:
-        return "evento-fora-do-escopo"  # evento de NFe que não é diesel
+        return "evento-fora-do-escopo", None  # evento de NFe que não é diesel
     if parsed.is_cancelamento:
         nf.cancelada = True
-        return "cancelamento"
-    return f"evento-{parsed.tp_evento}"
+        return "cancelamento", None
+    return f"evento-{parsed.tp_evento}", None
 
 
-def _aplicar(db: Session, doc: DocDFe) -> str:
+def _aplicar(db: Session, doc: DocDFe) -> tuple[str, NotaFiscal | None]:
     schema = (doc.schema or "").lower()
     if schema.startswith("procnfe") or schema.startswith("nfe"):
         return _aplicar_nfe(db, doc)
     if schema.startswith("resnfe"):
-        # Resumos são ignorados: a manifestação é feita pela contabilidade,
-        # e quando isso acontece a NFe completa entra na faixa de NSU.
-        return "resumo-ignorado"
+        return "resumo-ignorado", None
     if schema.startswith("proceventonfe") or schema.startswith("evento"):
         return _aplicar_evento(db, doc)
     if schema.startswith("resevento"):
-        # retEvento / resEventoNFe — recibo da SEFAZ para evento enviado pela contabilidade.
-        # Não há nada para processar; ignorar silenciosamente.
-        return "resevento-ignorado"
+        return "resevento-ignorado", None
     # fallback por inspeção do conteúdo
     if b"<resNFe" in doc.xml:
-        return "resumo-ignorado"
+        return "resumo-ignorado", None
     if b"infNFe" in doc.xml:
         return _aplicar_nfe(db, doc)
     if b"infEvento" in doc.xml:
         return _aplicar_evento(db, doc)
-    return f"schema-desconhecido:{schema}"
+    return f"schema-desconhecido:{schema}", None
 
 
 # ---------- entrada principal ----------
@@ -304,6 +304,7 @@ def processar(db: Session, *, force: bool = False) -> dict:
     ult_nsu = get_state(db, NSU_KEY, "0")
 
     contadores: dict[str, int] = {}
+    nfs_novas: list[NotaFiscal] = []
     bloqueado = False
 
     for _ in range(20):  # máx 20 páginas por ciclo
@@ -316,8 +317,10 @@ def processar(db: Session, *, force: bool = False) -> dict:
         log.info("SEFAZ cStat=%s ultNSU=%s docs=%d", cstat, ult_recebido, len(docs))
 
         for doc in docs:
-            r = _aplicar(db, doc)
+            r, nf_nova = _aplicar(db, doc)
             contadores[r] = contadores.get(r, 0) + 1
+            if nf_nova is not None:
+                nfs_novas.append(nf_nova)
 
         if ult_recebido and ult_recebido != ult_nsu:
             ult_nsu = ult_recebido
@@ -342,4 +345,14 @@ def processar(db: Session, *, force: bool = False) -> dict:
     resumo = avaliar_e_alertar(db)
     resumo["fonte"] = "sefaz"
     resumo["contadores"] = contadores
+
+    # Notificação agrupada: 1 e-mail com todas as NFs novas do ciclo.
+    # Import local para evitar ciclo (notify usa quota).
+    if nfs_novas:
+        try:
+            from .notify import notificar_nfs_novas
+            notificar_nfs_novas(db, nfs_novas, resumo)
+        except Exception:  # noqa: BLE001
+            log.exception("Falha enviando e-mail de NFs novas")
+
     return resumo
