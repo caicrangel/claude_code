@@ -1,0 +1,3 @@
+# Placeholder para versionar a pasta certs/ vazia.
+# Os certificados (.pfx/.pem) continuam ignorados pelo .gitignore.
+# Coloque aqui o certificado A1 da empresa, ex.: certs/certificado.pfx

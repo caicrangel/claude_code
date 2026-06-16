@@ -1,7 +1,8 @@
 __pycache__/
 *.pyc
 .env
-certs/
+certs/*
+!certs/.gitkeep
 *.pfx
 *.pem
 .venv/
