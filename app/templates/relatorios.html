@@ -12,9 +12,15 @@
 
   <form class="filtros" method="get" action="/relatorios">
     <label>Período histórico
-      <select name="periodo_id" onchange="this.form.submit()">
+      <select name="periodo_id" onchange="
+        // Trocar de período reseta o intervalo De/Até para as datas desse
+        // período. Se o usuário quer um subintervalo, ele edita depois.
+        this.form.querySelector('input[name=inicio]').value = '';
+        this.form.querySelector('input[name=fim]').value = '';
+        this.form.submit();
+      ">
         {% for p in periodos %}
-          <option value="{{ p.id }}" {% if p.id == periodo_selecionado.id and not request.query_params.get('inicio') %}selected{% endif %}>
+          <option value="{{ p.id }}" {% if p.id == periodo_selecionado.id %}selected{% endif %}>
             {{ p.nome or 'Período' }} · {{ p.inicio|data_curta }} → {{ p.fim|data_curta }}
             ({{ p.cota_litros|inteiro }} L){% if p.ativo %} · ativo{% endif %}
           </option>
@@ -187,13 +193,33 @@
       data: {labels: data.mensal.labels,
              datasets: [
                {label: 'Litros', data: data.mensal.litros, yAxisID: 'y',
-                borderColor: c.accent, backgroundColor: c.accent+'33', tension: 0.25, fill: true},
+                borderColor: c.accent, backgroundColor: c.accent+'33',
+                tension: 0.25, fill: true,
+                pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: c.accent},
                {label: 'Valor (R$)', data: data.mensal.valor, yAxisID: 'y2',
-                borderColor: c.warn, backgroundColor: 'transparent', tension: 0.25, borderDash: [4,4]},
+                borderColor: c.warn, backgroundColor: 'transparent',
+                tension: 0.25, borderDash: [4,4],
+                pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: c.warn},
              ]},
       options: {responsive: true,
-                plugins: {tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' +
-                    (ctx.datasetIndex === 1 ? rs(ctx.parsed.y) : fmt(ctx.parsed.y, 0) + ' L')}}},
+                // Mostra ambos datasets ao passar o mouse, sem precisar acertar a linha.
+                interaction: {mode: 'index', intersect: false, axis: 'x'},
+                plugins: {tooltip: {
+                  // Tooltip aparece pra qualquer posição X — mostra Litros + Valor + R$/L do mês.
+                  callbacks: {
+                    title: ctx => ctx[0] ? ctx[0].label : '',
+                    label: ctx => ctx.dataset.label + ': ' +
+                      (ctx.datasetIndex === 1 ? rs(ctx.parsed.y) : fmt(ctx.parsed.y, 0) + ' L'),
+                    afterBody: function(ctx) {
+                      // Acrescenta R$/L combinando os dois datasets no mesmo X.
+                      const i = ctx[0].dataIndex;
+                      const litros = data.mensal.litros[i] || 0;
+                      const valor = data.mensal.valor[i] || 0;
+                      if (!litros) return [];
+                      return ['Preço médio: ' + rs(valor / litros) + '/L'];
+                    }
+                  }
+                }},
                 scales: {y:  {position: 'left',  ticks: {callback: v => fmt(v, 0) + ' L'}, grid: {color: c.grid}},
                          y2: {position: 'right', ticks: {callback: v => rs(v)}, grid: {display: false}},
                          x:  {grid: {color: c.grid}}}}

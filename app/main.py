@@ -209,11 +209,13 @@ def relatorios(
 
     if periodo_id:
         sel = periodo_svc.get_periodo(db, periodo_id) or p_ativo
-        ini, fim_d = sel.inicio, sel.fim
     else:
-        ini = _parse_date(inicio, p_ativo.inicio)
-        fim_d = _parse_date(fim, p_ativo.fim)
         sel = p_ativo
+    # inicio/fim do form têm precedência sobre as datas do período selecionado:
+    # o período define o "contexto de cota" (% consumido, projeção); as datas
+    # definem o intervalo exibido. Permite filtrar um subintervalo livremente.
+    ini = _parse_date(inicio, sel.inicio)
+    fim_d = _parse_date(fim, sel.fim)
 
     k = _kpis(db, sel, inicio=ini, fim=fim_d)
 
