@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Configuração — {{ settings.EMPRESA_NOME }}{% endblock %}
 {% block content %}
-<div class="page">
+<div class="page config-page">
   {% if msg %}<div class="sync-msg ok inline">{{ msg }}</div>{% endif %}
   {% if erro %}<div class="sync-msg err inline">{{ erro }}</div>{% endif %}
 
-  <section>
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab" data-tab="periodos" role="tab">Períodos</button>
+    <button type="button" class="tab" data-tab="parametros" role="tab">Parâmetros do sistema</button>
+    <button type="button" class="tab" data-tab="emails" role="tab">E-mails de alerta</button>
+    <button type="button" class="tab" data-tab="usuarios" role="tab">Usuários do sistema</button>
+  </nav>
+
+  <!-- Aba: Períodos -->
+  <section class="tab-panel" data-panel="periodos">
     <h2>Período ativo</h2>
     {% if periodo_ativo %}
       <p class="muted">
@@ -18,22 +26,18 @@
     {% else %}
       <p class="muted">Nenhum período ativo. Crie um abaixo.</p>
     {% endif %}
-  </section>
 
-  <section>
     <h2>Criar novo período</h2>
     <p class="muted">Encerra o período ativo e inicia um novo. As NFs antigas continuam preservadas e
        acessíveis em <a href="/relatorios">Relatórios</a> filtrando por data ou pelo seletor de período.</p>
-    <form method="post" action="/configuracao/novo" class="grid grid-form">
+    <form method="post" action="/configuracao/novo?aba=periodos" class="grid grid-form">
       <label>Nome <input name="nome" required placeholder="ex: Sem 2026/2"></label>
       <label>Cota (L) <input name="cota_litros" type="number" step="0.001" required></label>
       <label>Início <input name="inicio" type="date" required></label>
       <label>Fim <input name="fim" type="date" required></label>
       <button type="submit">Criar e ativar</button>
     </form>
-  </section>
 
-  <section>
     <h2>Histórico de períodos</h2>
     <table>
       <thead><tr><th>Nome</th><th>Início</th><th>Fim</th><th class="num">Cota</th><th>Status</th><th></th></tr></thead>
@@ -48,7 +52,7 @@
             <td>
               <a class="btn-mini" href="/relatorios?periodo_id={{ p.id }}">ver relatório</a>
               {% if not p.ativo %}
-                <form method="post" action="/configuracao/ativar/{{ p.id }}" style="display:inline">
+                <form method="post" action="/configuracao/ativar/{{ p.id }}?aba=periodos" style="display:inline">
                   <button type="submit" class="btn-mini">reativar</button>
                 </form>
               {% endif %}
@@ -61,11 +65,12 @@
     </table>
   </section>
 
-  <section>
+  <!-- Aba: Parâmetros -->
+  <section class="tab-panel" data-panel="parametros">
     <h2>Parâmetros do sistema</h2>
     <p class="muted">Valores aplicados imediatamente após salvar. Settings sensíveis
        (SMTP, certificado, banco) continuam no arquivo <code>.env</code>.</p>
-    <form method="post" action="/configuracao/parametros" class="grid grid-form">
+    <form method="post" action="/configuracao/parametros?aba=parametros" class="grid grid-form">
       <label>Nome da empresa
         <input name="EMPRESA_NOME" value="{{ params.EMPRESA_NOME }}">
       </label>
@@ -88,12 +93,13 @@
     </form>
   </section>
 
-  <section>
+  <!-- Aba: E-mails -->
+  <section class="tab-panel" data-panel="emails">
     <h2>E-mails de alerta</h2>
     <p class="muted">Destinatários dos alertas automáticos quando a cota atinge cada limiar.
        Múltiplos destinatários recebem o mesmo e-mail. Desativar (sem excluir) permite pausar
        temporariamente sem perder o cadastro.</p>
-    <form method="post" action="/configuracao/emails/novo" class="grid grid-form">
+    <form method="post" action="/configuracao/emails/novo?aba=emails" class="grid grid-form">
       <label>E-mail <input name="email" type="email" required></label>
       <label>Nome (opcional) <input name="nome" placeholder="ex: Gestor de frota"></label>
       <button type="submit">Adicionar</button>
@@ -107,10 +113,10 @@
             <td>{{ e.nome or '—' }}</td>
             <td>{% if e.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">inativo</span>{% endif %}</td>
             <td class="acoes">
-              <form method="post" action="/configuracao/emails/{{ e.id }}/toggle">
+              <form method="post" action="/configuracao/emails/{{ e.id }}/toggle?aba=emails">
                 <button type="submit" class="btn-mini">{% if e.ativo %}desativar{% else %}ativar{% endif %}</button>
               </form>
-              <form method="post" action="/configuracao/emails/{{ e.id }}/excluir"
+              <form method="post" action="/configuracao/emails/{{ e.id }}/excluir?aba=emails"
                     onsubmit="return confirm('Remover este destinatário?');">
                 <button type="submit" class="btn-mini btn-danger">excluir</button>
               </form>
@@ -123,11 +129,12 @@
     </table>
   </section>
 
-  <section>
+  <!-- Aba: Usuários -->
+  <section class="tab-panel" data-panel="usuarios">
     <h2>Usuários do sistema</h2>
     <p class="muted"><strong>Administrador</strong> acessa todas as abas e gerencia configurações.
        <strong>Comum</strong> acessa apenas Visão geral e Relatórios.</p>
-    <form method="post" action="/configuracao/usuarios/novo" class="grid grid-form">
+    <form method="post" action="/configuracao/usuarios/novo?aba=usuarios" class="grid grid-form">
       <label>E-mail <input name="email" type="email" required></label>
       <label>Senha <input name="senha" type="password" required minlength="6"></label>
       <label>Nome (opcional) <input name="nome"></label>
@@ -152,13 +159,13 @@
             </td>
             <td>{% if u.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">inativo</span>{% endif %}</td>
             <td class="acoes">
-              <form method="post" action="/configuracao/usuarios/{{ u.id }}/senha"
+              <form method="post" action="/configuracao/usuarios/{{ u.id }}/senha?aba=usuarios"
                     onsubmit="var s=prompt('Nova senha (mín. 6 caracteres):'); if(!s||s.length<6){return false;} this.senha.value=s; return true;">
                 <input type="hidden" name="senha" value="">
                 <button type="submit" class="btn-mini">trocar senha</button>
               </form>
               {% if current_user and current_user.id != u.id %}
-                <form method="post" action="/configuracao/usuarios/{{ u.id }}/excluir"
+                <form method="post" action="/configuracao/usuarios/{{ u.id }}/excluir?aba=usuarios"
                       onsubmit="return confirm('Excluir usuário {{ u.email }}?');">
                   <button type="submit" class="btn-mini btn-danger">excluir</button>
                 </form>
@@ -172,4 +179,30 @@
     </table>
   </section>
 </div>
+
+<script>
+(function() {
+  const ABAS_VALIDAS = ['periodos', 'parametros', 'emails', 'usuarios'];
+  const tabs = document.querySelectorAll('.config-page .tab');
+  const panels = document.querySelectorAll('.config-page .tab-panel');
+
+  function ativar(nome) {
+    if (!ABAS_VALIDAS.includes(nome)) nome = 'periodos';
+    tabs.forEach(t => t.classList.toggle('is-active', t.dataset.tab === nome));
+    panels.forEach(p => p.classList.toggle('is-active', p.dataset.panel === nome));
+    history.replaceState(null, '', '#' + nome);
+  }
+
+  function abaInicial() {
+    const url = new URL(location.href);
+    const q = url.searchParams.get('aba');
+    if (q) return q;
+    const h = (location.hash || '').replace('#', '');
+    return h || 'periodos';
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => ativar(t.dataset.tab)));
+  ativar(abaInicial());
+})();
+</script>
 {% endblock %}

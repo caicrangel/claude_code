@@ -238,7 +238,7 @@ th {
   background: var(--panel-soft); color: var(--muted);
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.75rem;
 }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.center, th.center { text-align: center; }
 td.acoes { white-space: nowrap; }
 td.acoes form { display: inline-block; margin-right: 0.25rem; }
@@ -291,3 +291,28 @@ td.acoes form:last-child { margin-right: 0; }
 /* Configuração: separa seções */
 .page section { margin-bottom: 2rem; }
 .page section:last-child { margin-bottom: 0; }
+
+/* Configuração: abas */
+.config-page .tabs {
+  display: flex; gap: 0.25rem; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin: 0.5rem 0 1.5rem;
+}
+.config-page .tab {
+  background: transparent; color: var(--muted);
+  border: 1px solid transparent; border-bottom: 0;
+  padding: 0.6rem 1rem; cursor: pointer;
+  font-size: 0.92rem; font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px;
+}
+.config-page .tab:hover { color: var(--text); background: var(--panel-soft); }
+.config-page .tab.is-active {
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+}
+.config-page .tab-panel { display: none; }
+.config-page .tab-panel.is-active { display: block; }
+.config-page .tab-panel h2:first-child { margin-top: 0.2rem; }

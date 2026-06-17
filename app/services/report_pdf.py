@@ -209,7 +209,9 @@ def gerar_pdf_alerta(
 
 def _pagina_panorama(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
                      mes_inicio: date, mes_fim: date,
-                     consumo_mes: Decimal, consumo_acum: Decimal,
+                     consumo_mes: Decimal, valor_mes: Decimal,
+                     preco_medio_mes: Decimal,
+                     consumo_acum: Decimal,
                      cota: Decimal, pct_acum: float, restante: Decimal) -> None:
     """Página resumo do panorama mensal — sem faixa de alerta de limite."""
     fig, ax = plt.subplots(figsize=(8.27, 11.69))
@@ -231,6 +233,8 @@ def _pagina_panorama(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
         ("Período de apuração",
          f"{fmt_data_curta(periodo.inicio)}  a  {fmt_data_curta(periodo.fim)}"),
         ("Consumido no mês", fmt_litros(consumo_mes)),
+        ("Valor gasto no mês", fmt_moeda(valor_mes)),
+        ("Preço médio do litro", fmt_moeda(preco_medio_mes)),
         ("Acumulado no período", f"{fmt_litros(consumo_acum)}  ({fmt_pct(pct_acum)})"),
         ("Cota total", fmt_litros(cota)),
         ("Restante", fmt_litros(restante)),
@@ -238,9 +242,9 @@ def _pagina_panorama(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
     for label, valor in linhas:
         fig.text(0.08, y, label, fontsize=10, color="#64748b")
         fig.text(0.08, y - 0.025, valor, fontsize=15, fontweight="bold", color="#0f172a")
-        y -= 0.06
+        y -= 0.052
 
-    gauge_x, gauge_y, gauge_w, gauge_h = 0.08, 0.36, 0.84, 0.04
+    gauge_x, gauge_y, gauge_w, gauge_h = 0.08, 0.30, 0.84, 0.04
     fig.patches.append(Rectangle((gauge_x, gauge_y), gauge_w, gauge_h,
                                  transform=fig.transFigure,
                                  facecolor="#e2e8f0", edgecolor="#cbd5e1"))
@@ -269,6 +273,8 @@ def gerar_pdf_panorama(
     mes_inicio: date,
     mes_fim: date,
     consumo_mes: Decimal,
+    valor_mes: Decimal,
+    preco_medio_mes: Decimal,
     consumo_acum: Decimal,
     cota: Decimal,
     pct_acum: float,
@@ -279,7 +285,9 @@ def gerar_pdf_panorama(
     with PdfPages(buf) as pdf:
         _pagina_panorama(pdf, db=db, periodo=periodo,
                          mes_inicio=mes_inicio, mes_fim=mes_fim,
-                         consumo_mes=consumo_mes, consumo_acum=consumo_acum,
+                         consumo_mes=consumo_mes, valor_mes=valor_mes,
+                         preco_medio_mes=preco_medio_mes,
+                         consumo_acum=consumo_acum,
                          cota=cota, pct_acum=pct_acum, restante=restante)
         _pagina_graficos(pdf, db=db, periodo=periodo)
     return buf.getvalue()

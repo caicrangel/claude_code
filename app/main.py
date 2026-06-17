@@ -304,6 +304,27 @@ def relatorios(
 
 # ---------- configuração (admin) ----------
 
+ABAS_VALIDAS = {"periodos", "parametros", "emails", "usuarios"}
+
+
+def _config_redirect(request: Request, *, msg: str | None = None,
+                     erro: str | None = None) -> RedirectResponse:
+    """Redireciona para /configuracao preservando a aba (do query ?aba=...)."""
+    from urllib.parse import urlencode
+    aba = request.query_params.get("aba", "")
+    if aba not in ABAS_VALIDAS:
+        aba = ""
+    params = {}
+    if msg:
+        params["msg"] = msg
+    if erro:
+        params["erro"] = erro
+    if aba:
+        params["aba"] = aba
+    qs = ("?" + urlencode(params)) if params else ""
+    return RedirectResponse(f"/configuracao{qs}", status_code=303)
+
+
 @app.get("/configuracao", response_class=HTMLResponse,
          dependencies=[Depends(require_admin)])
 def config_get(request: Request, db: Session = Depends(get_db)):
@@ -321,6 +342,7 @@ def config_get(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/configuracao/novo", dependencies=[Depends(require_admin)])
 def config_novo(
+    request: Request,
     nome: str = Form(""),
     inicio: str = Form(...),
     fim: str = Form(...),
@@ -334,19 +356,20 @@ def config_novo(
         fim=date.fromisoformat(fim),
         cota_litros=Decimal(str(cota_litros)),
     )
-    return RedirectResponse("/configuracao?msg=Novo+periodo+criado", status_code=303)
+    return _config_redirect(request, msg="Novo periodo criado")
 
 
 @app.post("/configuracao/ativar/{periodo_id}", dependencies=[Depends(require_admin)])
-def config_ativar(periodo_id: int, db: Session = Depends(get_db)):
+def config_ativar(periodo_id: int, request: Request, db: Session = Depends(get_db)):
     periodo_svc.ativar(db, periodo_id)
-    return RedirectResponse("/configuracao?msg=Periodo+ativado", status_code=303)
+    return _config_redirect(request, msg="Periodo ativado")
 
 
 # ---- usuários ----
 
 @app.post("/configuracao/usuarios/novo", dependencies=[Depends(require_admin)])
 def usuario_novo(
+    request: Request,
     email: str = Form(...),
     senha: str = Form(...),
     nome: str = Form(""),
@@ -355,103 +378,97 @@ def usuario_novo(
 ):
     email = (email or "").strip().lower()
     if not email or not senha:
-        return RedirectResponse(
-            "/configuracao?erro=Email+e+senha+obrigatorios", status_code=303)
+        return _config_redirect(request, erro="Email e senha obrigatorios")
     if role not in (ROLE_ADMIN, ROLE_COMUM):
         role = ROLE_COMUM
     if db.query(Usuario).filter(Usuario.email == email).first():
-        return RedirectResponse(
-            "/configuracao?erro=Email+ja+cadastrado", status_code=303)
+        return _config_redirect(request, erro="Email ja cadastrado")
     db.add(Usuario(
         email=email, senha_hash=hash_senha(senha),
         nome=nome or None, role=role, ativo=True,
     ))
     db.commit()
-    return RedirectResponse("/configuracao?msg=Usuario+criado", status_code=303)
+    return _config_redirect(request, msg="Usuario criado")
 
 
 @app.post("/configuracao/usuarios/{user_id}/excluir",
           dependencies=[Depends(require_admin)])
 def usuario_excluir(user_id: int, request: Request, db: Session = Depends(get_db)):
-    # impede o admin logado de se excluir
     if request.session.get("user_id") == user_id:
-        return RedirectResponse(
-            "/configuracao?erro=Nao+e+possivel+excluir+a+si+mesmo", status_code=303)
-    # impede excluir o último admin
+        return _config_redirect(request, erro="Nao e possivel excluir a si mesmo")
     u = db.get(Usuario, user_id)
     if u is None:
-        return RedirectResponse("/configuracao", status_code=303)
+        return _config_redirect(request)
     if u.role == ROLE_ADMIN:
         outros_admins = db.query(Usuario).filter(
             Usuario.role == ROLE_ADMIN, Usuario.id != user_id,
             Usuario.ativo.is_(True),
         ).count()
         if outros_admins == 0:
-            return RedirectResponse(
-                "/configuracao?erro=Mantenha+ao+menos+um+admin", status_code=303)
+            return _config_redirect(request, erro="Mantenha ao menos um admin")
     db.delete(u)
     db.commit()
-    return RedirectResponse("/configuracao?msg=Usuario+excluido", status_code=303)
+    return _config_redirect(request, msg="Usuario excluido")
 
 
 @app.post("/configuracao/usuarios/{user_id}/senha",
           dependencies=[Depends(require_admin)])
-def usuario_senha(user_id: int, senha: str = Form(...), db: Session = Depends(get_db)):
+def usuario_senha(user_id: int, request: Request, senha: str = Form(...),
+                  db: Session = Depends(get_db)):
     if not senha:
-        return RedirectResponse(
-            "/configuracao?erro=Senha+vazia", status_code=303)
+        return _config_redirect(request, erro="Senha vazia")
     u = db.get(Usuario, user_id)
     if u is None:
-        return RedirectResponse("/configuracao", status_code=303)
+        return _config_redirect(request)
     u.senha_hash = hash_senha(senha)
     db.commit()
-    return RedirectResponse("/configuracao?msg=Senha+atualizada", status_code=303)
+    return _config_redirect(request, msg="Senha atualizada")
 
 
 # ---- e-mails de alerta ----
 
 @app.post("/configuracao/emails/novo", dependencies=[Depends(require_admin)])
 def email_novo(
+    request: Request,
     email: str = Form(...),
     nome: str = Form(""),
     db: Session = Depends(get_db),
 ):
     email = (email or "").strip().lower()
     if not email or "@" not in email:
-        return RedirectResponse(
-            "/configuracao?erro=Email+invalido", status_code=303)
+        return _config_redirect(request, erro="Email invalido")
     if db.query(EmailAlerta).filter(EmailAlerta.email == email).first():
-        return RedirectResponse(
-            "/configuracao?erro=Email+ja+cadastrado", status_code=303)
+        return _config_redirect(request, erro="Email ja cadastrado")
     db.add(EmailAlerta(email=email, nome=nome or None, ativo=True))
     db.commit()
-    return RedirectResponse("/configuracao?msg=Email+adicionado", status_code=303)
+    return _config_redirect(request, msg="Email adicionado")
 
 
 @app.post("/configuracao/emails/{email_id}/excluir",
           dependencies=[Depends(require_admin)])
-def email_excluir(email_id: int, db: Session = Depends(get_db)):
+def email_excluir(email_id: int, request: Request, db: Session = Depends(get_db)):
     e = db.get(EmailAlerta, email_id)
     if e is not None:
         db.delete(e)
         db.commit()
-    return RedirectResponse("/configuracao?msg=Email+removido", status_code=303)
+    return _config_redirect(request, msg="Email removido")
 
 
 @app.post("/configuracao/emails/{email_id}/toggle",
           dependencies=[Depends(require_admin)])
-def email_toggle(email_id: int, db: Session = Depends(get_db)):
+def email_toggle(email_id: int, request: Request, db: Session = Depends(get_db)):
     e = db.get(EmailAlerta, email_id)
     if e is not None:
         e.ativo = not e.ativo
         db.commit()
-    return RedirectResponse("/configuracao?msg=Status+atualizado", status_code=303)
+    return _config_redirect(request, msg="Status atualizado")
 
 
 # ---- parâmetros gerais ----
 
 @app.post("/configuracao/parametros", dependencies=[Depends(require_admin)])
 def parametros_salvar(
+    request: Request,
     EMPRESA_NOME: str = Form(""),
     EMPRESA_CNPJ: str = Form(""),
     EMPRESA_LOGO_LIGHT: str = Form(""),
@@ -466,18 +483,16 @@ def parametros_salvar(
         "EMPRESA_LOGO_DARK": EMPRESA_LOGO_DARK.strip(),
         "ALERT_THRESHOLDS": ALERT_THRESHOLDS.strip(),
     }
-    # validação simples dos thresholds
     if valores["ALERT_THRESHOLDS"]:
         try:
             [int(x) for x in valores["ALERT_THRESHOLDS"].split(",") if x.strip()]
         except ValueError:
-            return RedirectResponse(
-                "/configuracao?erro=Thresholds+invalidos+%28use+numeros+separados+por+virgula%29",
-                status_code=303)
+            return _config_redirect(
+                request,
+                erro="Thresholds invalidos (use numeros separados por virgula)")
     for chave, valor in valores.items():
         runtime_config.set_(db, chave, valor)
-    return RedirectResponse(
-        "/configuracao?msg=Parametros+atualizados", status_code=303)
+    return _config_redirect(request, msg="Parametros atualizados")
 
 
 def _reavaliar_alertas(db: Session) -> None:

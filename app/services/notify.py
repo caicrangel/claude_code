@@ -13,6 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from html import escape
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import runtime_config
@@ -26,6 +27,22 @@ from .report_pdf import gerar_pdf_panorama
 log = logging.getLogger(__name__)
 
 PANORAMA_STATE_PREFIX = "panorama_mensal_"
+
+
+def _valor_consumido(db: Session, *, inicio: date, fim: date) -> Decimal:
+    """Soma o valor_total das NFs que entram na cota no intervalo."""
+    total = (
+        db.query(func.coalesce(func.sum(NotaFiscal.valor_total), 0))
+        .filter(
+            NotaFiscal.data_emissao >= inicio,
+            NotaFiscal.data_emissao <= fim,
+            NotaFiscal.is_resumo.is_(False),
+            NotaFiscal.cancelada.is_(False),
+            NotaFiscal.excluida_cota.is_(False),
+        )
+        .scalar()
+    )
+    return Decimal(total or 0)
 
 
 def _destinatarios_ativos(db: Session) -> list[str]:
@@ -216,6 +233,8 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
 
     # KPIs do mês de referência
     consumo_mes = litros_consumidos(db, inicio=ini_efetivo, fim=fim_efetivo)
+    valor_mes = _valor_consumido(db, inicio=ini_efetivo, fim=fim_efetivo)
+    preco_medio_mes = (valor_mes / consumo_mes) if consumo_mes else Decimal(0)
     # KPIs acumulados do período inteiro até o fim do mês
     consumo_acum = litros_consumidos(db, inicio=p.inicio, fim=fim_efetivo)
     cota = Decimal(p.cota_litros or 0)
@@ -227,7 +246,9 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
     try:
         pdf_bytes = gerar_pdf_panorama(
             db, periodo=p, mes_inicio=ini_efetivo, mes_fim=fim_efetivo,
-            consumo_mes=consumo_mes, consumo_acum=consumo_acum,
+            consumo_mes=consumo_mes, valor_mes=valor_mes,
+            preco_medio_mes=preco_medio_mes,
+            consumo_acum=consumo_acum,
             cota=cota, pct_acum=pct_acum, restante=restante,
         )
     except Exception:  # noqa: BLE001
@@ -241,12 +262,15 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
         f"Panorama de fechamento — {mes_label}\n"
         f"Período de apuração: {fmt_data_curta(p.inicio)} a {fmt_data_curta(p.fim)}\n\n"
         f"Consumido no mês: {fmt_litros(consumo_mes)}\n"
+        f"Valor gasto no mês: {fmt_moeda(valor_mes)}\n"
+        f"Preço médio do litro: {fmt_moeda(preco_medio_mes)}\n\n"
         f"Consumido acumulado: {fmt_litros(consumo_acum)} ({fmt_pct(pct_acum)})\n"
         f"Restante da cota: {fmt_litros(restante)} de {fmt_litros(cota)}\n\n"
         f"Veja o PDF anexo para o relatório completo com gráficos."
     )
     html = _html_panorama(empresa, cnpj, p, ini_efetivo, fim_efetivo,
-                          consumo_mes, consumo_acum, cota, pct_acum, restante)
+                          consumo_mes, valor_mes, preco_medio_mes,
+                          consumo_acum, cota, pct_acum, restante)
     anexos = []
     if pdf_bytes:
         nome_pdf = f"panorama-{inicio.strftime('%Y-%m')}.pdf"
@@ -268,8 +292,9 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
 
 
 def _html_panorama(empresa: str, cnpj: str, periodo, ini_mes: date, fim_mes: date,
-                   consumo_mes: Decimal, consumo_acum: Decimal, cota: Decimal,
-                   pct_acum: float, restante: Decimal) -> str:
+                   consumo_mes: Decimal, valor_mes: Decimal,
+                   preco_medio_mes: Decimal, consumo_acum: Decimal,
+                   cota: Decimal, pct_acum: float, restante: Decimal) -> str:
     cor_uso = "#dc2626" if pct_acum >= 95 else ("#d97706" if pct_acum >= 70 else "#16a34a")
     pct_fill = min(pct_acum, 100.0)
     mes_label = ini_mes.strftime("%m/%Y")
@@ -302,6 +327,16 @@ def _html_panorama(empresa: str, cnpj: str, periodo, ini_mes: date, fim_mes: dat
           <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Consumido no mês</td>
           <td style="padding:8px 0;font-weight:600;text-align:right;
                      border-top:1px solid #e2e8f0;">{fmt_litros(consumo_mes)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Valor gasto no mês</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;
+                     border-top:1px solid #e2e8f0;">{fmt_moeda(valor_mes)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Preço médio do litro</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;
+                     border-top:1px solid #e2e8f0;">{fmt_moeda(preco_medio_mes)}</td>
         </tr>
         <tr>
           <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Acumulado no período</td>
