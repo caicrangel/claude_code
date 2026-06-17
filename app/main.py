@@ -334,7 +334,8 @@ def config_get(request: Request, db: Session = Depends(get_db)):
         periodos=periodo_svc.listar(db),
         usuarios=db.query(Usuario).order_by(Usuario.email).all(),
         emails_alerta=db.query(EmailAlerta).order_by(EmailAlerta.email).all(),
-        params=runtime_config.snapshot(db),
+        params=runtime_config.snapshot_safe(db),
+        cert_info=runtime_config.get_cert_info(db),
         msg=request.query_params.get("msg"),
         erro=request.query_params.get("erro"),
     )
@@ -493,6 +494,93 @@ def parametros_salvar(
     for chave, valor in valores.items():
         runtime_config.set_(db, chave, valor)
     return _config_redirect(request, msg="Parametros atualizados")
+
+
+# ---- SMTP ----
+
+@app.post("/configuracao/smtp", dependencies=[Depends(require_admin)])
+def smtp_salvar(
+    request: Request,
+    SMTP_HOST: str = Form(""),
+    SMTP_PORT: str = Form(""),
+    SMTP_USER: str = Form(""),
+    SMTP_PASSWORD: str = Form(""),
+    SMTP_FROM: str = Form(""),
+    SMTP_TLS: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    if SMTP_PORT.strip():
+        try:
+            p = int(SMTP_PORT)
+            if not (0 < p < 65536):
+                raise ValueError
+        except ValueError:
+            return _config_redirect(request, erro="Porta SMTP invalida")
+
+    valores = {
+        "SMTP_HOST": SMTP_HOST.strip(),
+        "SMTP_PORT": SMTP_PORT.strip(),
+        "SMTP_USER": SMTP_USER.strip(),
+        "SMTP_FROM": SMTP_FROM.strip(),
+        # Checkbox HTML envia "on" quando marcado, ausente quando não.
+        "SMTP_TLS":  "true" if SMTP_TLS else "false",
+    }
+    for chave, valor in valores.items():
+        runtime_config.set_(db, chave, valor)
+    # Senha: só atualiza se o admin digitou algo. Vazio = manter atual.
+    if SMTP_PASSWORD:
+        runtime_config.set_(db, "SMTP_PASSWORD", SMTP_PASSWORD)
+    return _config_redirect(request, msg="SMTP atualizado")
+
+
+# ---- SEFAZ ----
+
+@app.post("/configuracao/sefaz", dependencies=[Depends(require_admin)])
+def sefaz_salvar(
+    request: Request,
+    SEFAZ_AMBIENTE: str = Form("1"),
+    SEFAZ_UF: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    if SEFAZ_AMBIENTE not in ("1", "2"):
+        return _config_redirect(request, erro="Ambiente SEFAZ invalido (1 ou 2)")
+    uf = SEFAZ_UF.strip().upper()
+    from .services.sefaz import UF_COD
+    if uf and uf not in UF_COD:
+        return _config_redirect(request, erro=f"UF invalida: {uf}")
+    runtime_config.set_(db, "SEFAZ_AMBIENTE", SEFAZ_AMBIENTE)
+    if uf:
+        runtime_config.set_(db, "SEFAZ_UF", uf)
+    return _config_redirect(request, msg="SEFAZ atualizado")
+
+
+# ---- Certificado digital ----
+
+@app.post("/configuracao/certificado", dependencies=[Depends(require_admin)])
+async def certificado_upload(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    senha: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    nome = arquivo.filename or "certificado.pfx"
+    if not nome.lower().endswith(".pfx"):
+        return _config_redirect(request, erro="Arquivo precisa ter extensao .pfx")
+    if not senha:
+        return _config_redirect(request, erro="Senha do certificado obrigatoria")
+    conteudo = await arquivo.read()
+    if len(conteudo) > 256 * 1024:  # 256KB — A1 PFX típico tem 4-12KB
+        return _config_redirect(request, erro="Arquivo muito grande")
+    # Valida abrindo o PFX com a senha antes de gravar.
+    try:
+        from .services.sefaz import load_pfx_bytes
+        load_pfx_bytes(conteudo, senha)
+    except Exception:  # noqa: BLE001
+        log.exception("Falha validando certificado no upload")
+        return _config_redirect(
+            request, erro="Falha lendo certificado (arquivo invalido ou senha errada)")
+    runtime_config.set_cert(db, pfx_bytes=conteudo, senha=senha, nome_arquivo=nome)
+    return _config_redirect(request, msg="Certificado atualizado")
 
 
 def _reavaliar_alertas(db: Session) -> None:

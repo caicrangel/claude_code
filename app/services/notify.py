@@ -183,7 +183,7 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict) -
     html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota)
     enviados = 0
     for dest in destinatarios:
-        if send_email(to=dest, subject=subject, body=text, html_body=html):
+        if send_email(to=dest, subject=subject, body=text, html_body=html, db=db):
             enviados += 1
     log.info("Notificação de NFs novas: %d NFs → %d/%d destinatários OK",
              len(nfs), enviados, len(destinatarios))
@@ -279,7 +279,7 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
     enviados = 0
     for dest in destinatarios:
         if send_email(to=dest, subject=subject, body=text, html_body=html,
-                      attachments=anexos or None):
+                      attachments=anexos or None, db=db):
             enviados += 1
 
     if enviados:

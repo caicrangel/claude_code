@@ -1,7 +1,8 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint,
+    Boolean, Column, Date, DateTime, Integer, LargeBinary, Numeric, String, Text,
+    UniqueConstraint,
 )
 
 from .database import Base
@@ -103,11 +104,30 @@ class EmailAlerta(Base):
 
 class AppConfig(Base):
     """Parâmetros editáveis em runtime pela tela de configuração.
-    Cai no valor do .env (Settings) quando a chave não existe aqui."""
+    Cai no valor do .env (Settings) quando a chave não existe aqui.
+
+    Para campos sensíveis (senhas), o valor é cifrado com Fernet (ver
+    app.crypto) antes de gravar. Quem persiste/lê deve usar os helpers
+    de runtime_config — não acessar este modelo direto."""
     __tablename__ = "app_config"
 
     chave = Column(String(80), primary_key=True)
     valor = Column(Text, nullable=False, default="")
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CertificadoDigital(Base):
+    """Certificado A1 (.pfx) armazenado no banco.
+
+    Único registro (id=1). O PFX em si já é criptografado pela própria
+    senha do certificado; a senha que abre o PFX é guardada cifrada com
+    Fernet (chave derivada do SECRET_KEY)."""
+    __tablename__ = "certificado_digital"
+
+    id = Column(Integer, primary_key=True, default=1)
+    nome_arquivo = Column(String(255))
+    pfx = Column(LargeBinary, nullable=False)
+    senha_cifrada = Column(Text, nullable=False)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

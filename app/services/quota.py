@@ -181,6 +181,7 @@ def avaliar_e_alertar(db: Session) -> dict:
                 body=msg_text,
                 html_body=msg_html,
                 attachments=anexos or None,
+                db=db,
             )
             ok_any = ok_any or ok
         if not destinatarios:

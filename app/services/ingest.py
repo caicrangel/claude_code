@@ -70,12 +70,33 @@ class TooSoonError(RuntimeError):
         self.segundos_restantes = segundos_restantes
 
 
-def get_client() -> SefazClient:
+def get_client(db: Session | None = None) -> SefazClient:
+    """Constrói o cliente SEFAZ a partir da configuração efetiva:
+    - cert: banco (preferência) ou arquivo do .env (fallback);
+    - ambiente/uf: banco ou .env via runtime_config.get_sefaz.
+    Quando `db` é None, cai no .env puro (compatibilidade)."""
+    if db is None:
+        return SefazClient(
+            cert_path=settings.CERT_PATH,
+            cert_password=settings.CERT_PASSWORD,
+            ambiente=settings.SEFAZ_AMBIENTE,
+            uf=settings.SEFAZ_UF,
+        )
+    cfg = runtime_config.get_sefaz(db)
+    cert = runtime_config.get_cert(db)
+    if cert is not None:
+        pfx_bytes, senha = cert
+        return SefazClient(
+            cert_bytes=pfx_bytes,
+            cert_password=senha,
+            ambiente=cfg["ambiente"],
+            uf=cfg["uf"],
+        )
     return SefazClient(
         cert_path=settings.CERT_PATH,
         cert_password=settings.CERT_PASSWORD,
-        ambiente=settings.SEFAZ_AMBIENTE,
-        uf=settings.SEFAZ_UF,
+        ambiente=cfg["ambiente"],
+        uf=cfg["uf"],
     )
 
 
@@ -300,7 +321,7 @@ def processar(db: Session, *, force: bool = False) -> dict:
         raise RuntimeError("EMPRESA_CNPJ não configurado (defina via tela de Configuração ou .env)")
     _check_throttle(db, force)
 
-    client = get_client()
+    client = get_client(db)
     ult_nsu = get_state(db, NSU_KEY, "0")
 
     contadores: dict[str, int] = {}

@@ -67,9 +67,10 @@
 
   <!-- Aba: Parâmetros -->
   <section class="tab-panel" data-panel="parametros">
-    <h2>Parâmetros do sistema</h2>
-    <p class="muted">Valores aplicados imediatamente após salvar. Settings sensíveis
-       (SMTP, certificado, banco) continuam no arquivo <code>.env</code>.</p>
+    <h2>Identidade e alertas</h2>
+    <p class="muted">Valores aplicados imediatamente após salvar. Apenas
+       <code>DATABASE_URL</code> e <code>SECRET_KEY</code> continuam no <code>.env</code>
+       por motivo técnico.</p>
     <form method="post" action="/configuracao/parametros?aba=parametros" class="grid grid-form">
       <label>Nome da empresa
         <input name="EMPRESA_NOME" value="{{ params.EMPRESA_NOME }}">
@@ -89,7 +90,76 @@
         <input name="ALERT_THRESHOLDS" value="{{ params.ALERT_THRESHOLDS }}"
                placeholder="70,85,95,100">
       </label>
-      <button type="submit">Salvar parâmetros</button>
+      <button type="submit">Salvar identidade</button>
+    </form>
+
+    <h2>Certificado digital (A1)</h2>
+    {% if cert_info %}
+      <p class="muted">
+        Atual: <strong>{{ cert_info.nome_arquivo or '—' }}</strong>
+        · {{ cert_info.tamanho }} bytes
+        · atualizado em {{ cert_info.atualizado_em|data }}
+      </p>
+    {% else %}
+      <p class="muted">Nenhum certificado salvo no banco. O sistema cai no
+         <code>CERT_PATH</code> do <code>.env</code> enquanto isso.</p>
+    {% endif %}
+    <form method="post" action="/configuracao/certificado?aba=parametros"
+          enctype="multipart/form-data" class="grid grid-form">
+      <label>Arquivo .pfx
+        <input type="file" name="arquivo" accept=".pfx" required>
+      </label>
+      <label>Senha do certificado
+        <input type="password" name="senha" required autocomplete="new-password">
+      </label>
+      <button type="submit">Enviar certificado</button>
+    </form>
+
+    <h2>SEFAZ</h2>
+    <p class="muted">Ambiente da SEFAZ e UF do consultante (cUFAutor).
+       A NFeDistribuicaoDFe é nacional — a UF é apenas roteamento.</p>
+    <form method="post" action="/configuracao/sefaz?aba=parametros" class="grid grid-form">
+      <label>Ambiente
+        <select name="SEFAZ_AMBIENTE">
+          <option value="1" {% if params.SEFAZ_AMBIENTE == '1' %}selected{% endif %}>1 — Produção</option>
+          <option value="2" {% if params.SEFAZ_AMBIENTE == '2' %}selected{% endif %}>2 — Homologação</option>
+        </select>
+      </label>
+      <label>UF
+        <input name="SEFAZ_UF" value="{{ params.SEFAZ_UF }}" maxlength="2" placeholder="MG">
+      </label>
+      <button type="submit">Salvar SEFAZ</button>
+    </form>
+
+    <h2>SMTP (envio de e-mails)</h2>
+    <p class="muted">Servidor de saída para alertas e relatórios. Deixe a
+       <strong>senha em branco para manter a atual</strong>.</p>
+    <form method="post" action="/configuracao/smtp?aba=parametros" class="grid grid-form">
+      <label>Host
+        <input name="SMTP_HOST" value="{{ params.SMTP_HOST }}" placeholder="smtp.gmail.com">
+      </label>
+      <label>Porta
+        <input name="SMTP_PORT" type="number" min="1" max="65535"
+               value="{{ params.SMTP_PORT }}" placeholder="587">
+      </label>
+      <label>Usuário
+        <input name="SMTP_USER" value="{{ params.SMTP_USER }}" autocomplete="username">
+      </label>
+      <label>Senha
+        <input name="SMTP_PASSWORD" type="password" placeholder="{% if params.SMTP_PASSWORD %}(senha gravada — em branco para manter){% else %}—{% endif %}"
+               autocomplete="new-password">
+      </label>
+      <label>Remetente (From)
+        <input name="SMTP_FROM" value="{{ params.SMTP_FROM }}" placeholder="alertas@empresa.com.br">
+      </label>
+      <label>TLS
+        <select name="SMTP_TLS">
+          {% set tls_on = params.SMTP_TLS in ('true','True','1','on','yes','sim') %}
+          <option value="on" {% if tls_on %}selected{% endif %}>Ativado</option>
+          <option value="" {% if not tls_on %}selected{% endif %}>Desativado</option>
+        </select>
+      </label>
+      <button type="submit">Salvar SMTP</button>
     </form>
   </section>
 

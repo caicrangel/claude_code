@@ -91,9 +91,9 @@ class CertAdapter(requests.adapters.HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
-def load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
-    """Lê um .pfx e devolve (cert_chain_pem, key_pem)."""
-    data = Path(pfx_path).read_bytes()
+def load_pfx_bytes(data: bytes, password: str) -> tuple[bytes, bytes]:
+    """Decodifica um .pfx (bytes) e devolve (cert_chain_pem, key_pem).
+    Levanta exceção da `cryptography` se a senha estiver errada."""
     key, cert, extra = pkcs12.load_key_and_certificates(data, password.encode())
     cert_pem = cert.public_bytes(Encoding.PEM)
     if extra:
@@ -105,6 +105,12 @@ def load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
         encryption_algorithm=NoEncryption(),
     )
     return cert_pem, key_pem
+
+
+def load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
+    """Wrapper que lê do arquivo. Mantido para compatibilidade com o caminho
+    do .env. Internamente delega para `load_pfx_bytes`."""
+    return load_pfx_bytes(Path(pfx_path).read_bytes(), password)
 
 
 def _envelope_dist(uf_cod: str, ambiente: int, cnpj: str, body_inner: str) -> bytes:
@@ -154,11 +160,17 @@ def _extrair_chave(xml: bytes) -> str | None:
 
 
 class SefazClient:
-    def __init__(self, cert_path: str, cert_password: str, ambiente: int, uf: str):
+    def __init__(self, *, cert_path: str | None = None, cert_bytes: bytes | None = None,
+                 cert_password: str, ambiente: int, uf: str):
+        if cert_bytes is None and cert_path is None:
+            raise ValueError("É necessário fornecer cert_bytes ou cert_path")
         self.ambiente = ambiente
         self.uf = uf.upper()
         self.uf_cod = UF_COD[self.uf]
-        self.cert_pem, self.key_pem = load_pfx(cert_path, cert_password)
+        if cert_bytes is not None:
+            self.cert_pem, self.key_pem = load_pfx_bytes(cert_bytes, cert_password)
+        else:
+            self.cert_pem, self.key_pem = load_pfx(cert_path, cert_password)
         self.session = requests.Session()
         self.session.mount("https://", CertAdapter(self.cert_pem, self.key_pem))
 
