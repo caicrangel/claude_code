@@ -38,6 +38,13 @@ def fmt_inteiro(v) -> str:
     return _ptbr(f"{Decimal(str(v)):,.0f}")
 
 
+def fmt_numero(v, casas: int = 2) -> str:
+    """Número pt-BR sem unidade. Útil em tabelas onde a coluna já indica a unidade."""
+    if v is None:
+        return "—"
+    return _ptbr(f"{Decimal(str(v)):,.{casas}f}")
+
+
 def fmt_pct(v, casas: int = 2) -> str:
     if v is None:
         return "—"
@@ -78,6 +85,7 @@ def register(env) -> None:
     env.filters["litros_curto"] = fmt_litros_curto
     env.filters["moeda"] = fmt_moeda
     env.filters["inteiro"] = fmt_inteiro
+    env.filters["numero"] = fmt_numero
     env.filters["pct"] = fmt_pct
     env.filters["data"] = fmt_data
     env.filters["data_curta"] = fmt_data_curta

@@ -72,7 +72,7 @@
         <tr>
           <th>Emissão</th><th class="num">Nº NF</th><th>Emitente</th><th>Natureza da operação</th>
           <th class="num">Litros</th><th class="num">Valor</th>
-          <th class="center">Status</th><th></th>
+          <th class="center">Status</th><th class="center">Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -82,8 +82,8 @@
             <td class="num">{{ n.numero or '—' }}</td>
             <td>{{ n.emitente_nome }}</td>
             <td class="muted">{{ n.natureza_operacao or '—' }}</td>
-            <td class="num">{{ n.litros_diesel|litros }}</td>
-            <td class="num">{{ n.valor_total|moeda }}</td>
+            <td class="num">{{ n.litros_diesel|numero }}</td>
+            <td class="num">{{ n.valor_total|numero }}</td>
             <td class="center">
               {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
               {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
