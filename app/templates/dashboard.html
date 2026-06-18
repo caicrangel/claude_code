@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% block title %}{{ settings.EMPRESA_NOME }} — Cota{% endblock %}
 {% block content %}
 <div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#painel" hx-target="#painel" hx-swap="outerHTML">
   <h1>{{ settings.EMPRESA_NOME }}</h1>
