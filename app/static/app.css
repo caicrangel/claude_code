@@ -74,7 +74,7 @@ h2 { margin: 1.5rem 0 0.6rem; font-size: 1.15rem; }
   font-weight: 700; font-size: 1.05rem; color: var(--text);
 }
 .topbar .brand:hover { text-decoration: none; }
-.topbar .brand .logo { height: 32px; width: auto; max-width: 180px; object-fit: contain; }
+.topbar .brand .logo { height: 44px; width: auto; max-width: 220px; object-fit: contain; }
 .topbar nav { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
 .topbar nav a { color: var(--text); }
 .topbar nav a:hover { color: var(--accent); text-decoration: none; }
