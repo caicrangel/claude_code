@@ -606,7 +606,7 @@ def toggle_cota(nota_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/dashboard", status_code=303)
 
 
-@app.post("/notas/{nota_id}/excluir", dependencies=[Depends(require_login)])
+@app.post("/notas/{nota_id}/excluir", dependencies=[Depends(require_admin)])
 def excluir_nota(nota_id: int, db: Session = Depends(get_db)):
     """Remove DEFINITIVAMENTE uma NF do sistema. Para corrigir inserções
     incorretas (upload manual errado, NFe que não deveria estar aqui).

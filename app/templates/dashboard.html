@@ -97,10 +97,12 @@
                   </button>
                 </form>
               {% endif %}
+              {% if is_admin %}
               <form method="post" action="/notas/{{ n.id }}/excluir" style="display:inline"
                     onsubmit="return confirm('ATENÇÃO: excluir DEFINITIVAMENTE esta NF do sistema?\n\nEmitente: {{ n.emitente_nome }}\nLitros: {{ n.litros_diesel|litros }}\nValor: {{ n.valor_total|moeda }}\n\nUse só em caso de inserção por engano. Esta ação NÃO pode ser desfeita.');">
                 <button type="submit" class="btn-mini btn-danger" title="Excluir NF do sistema">✕ excluir do banco</button>
               </form>
+              {% endif %}
             </td>
           </tr>
         {% else %}
