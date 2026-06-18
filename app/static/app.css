@@ -85,6 +85,10 @@ h2 { margin: 1.5rem 0 0.6rem; font-size: 1.15rem; }
   font-size: 1rem; padding: 0; line-height: 1;
 }
 .theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle-floating {
+  position: fixed; top: 16px; right: 16px; z-index: 10;
+  background: var(--panel); box-shadow: var(--shadow);
+}
 :root[data-theme="dark"] .theme-light { display: none; }
 :root[data-theme="light"] .theme-dark { display: none; }
 :root[data-theme="dark"] .logo-light { display: none; }

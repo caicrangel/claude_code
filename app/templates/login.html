@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Login{% endblock %}
+{% block topbar %}
+  <button type="button" class="theme-toggle theme-toggle-floating"
+          onclick="toggleTheme()"
+          title="Alternar tema claro/escuro"
+          aria-label="Alternar tema">
+    <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
+  </button>
+{% endblock %}
 {% block content %}
 <div class="login-card">
   {% if logo_urls and (logo_urls.light or logo_urls.dark) %}

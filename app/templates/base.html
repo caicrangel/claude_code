@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Cota Diesel{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css?v=10">
+  <link rel="stylesheet" href="/static/app.css?v=11">
   <script>
     // tema aplicado antes da pintura para evitar flash
     (function(){
@@ -27,6 +27,7 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {% block topbar %}
   <header class="topbar">
     <a class="brand" href="/dashboard">
       {% if logo_urls and (logo_urls.light or logo_urls.dark) %}
@@ -60,6 +61,7 @@
       {% endif %}
     </nav>
   </header>
+  {% endblock %}
   <main>
     {% block content %}{% endblock %}
   </main>
