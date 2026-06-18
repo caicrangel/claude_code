@@ -225,7 +225,7 @@
             <td>{{ u.nome or '—' }}</td>
             <td>
               {% if u.role == 'admin' %}<span class="tag tag-ok">admin</span>
-              {% else %}<span class="tag">{{ u.role }}</span>{% endif %}
+              {% else %}<span class="tag tag-warn">{{ u.role }}</span>{% endif %}
             </td>
             <td>{% if u.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">inativo</span>{% endif %}</td>
             <td class="acoes">
