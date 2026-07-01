@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,7 +24,7 @@ from .auth import (
 )
 from .config import settings
 from .database import get_db, run_migrations
-from .models import CotaPeriodo, EmailAlerta, NotaFiscal, Usuario
+from .models import CotaPeriodo, EmailAlerta, NotaFiscal, Usuario, get_state, set_state
 from .services import periodo as periodo_svc
 from .services.ingest import (
     TooSoonError,
@@ -623,15 +623,37 @@ def excluir_nota(nota_id: int, db: Session = Depends(get_db)):
     return RedirectResponse("/dashboard", status_code=303)
 
 
+SYNC_MANUAL_KEY = "ultima_sync_manual_em"
+SYNC_MANUAL_COOLDOWN_SEG = 300  # 5 min entre sincronizações manuais
+
+
 @app.post("/sync", dependencies=[Depends(require_admin)])
 def sync_manual(db: Session = Depends(get_db)):
     """Dispara um ciclo de sincronização SEFAZ sob demanda (admin).
 
     Usa force=False: respeita o intervalo mínimo entre consultas e o
-    bloqueio cStat=656. Se estiver dentro da janela de throttle, não toca
-    no SEFAZ — apenas informa quanto falta. É seguro clicar após reinícios
-    da máquina para puxar NFs atrasadas sem risco de consumo indevido."""
+    bloqueio cStat=656. Além disso aplica um cooldown próprio de 5 min
+    entre cliques manuais — impede que cliques repetidos durante um
+    catch-up grande acumulem consultas e provoquem o cStat=656.
+    O worker automático (2h) não é afetado por esse cooldown."""
     from urllib.parse import quote_plus
+
+    # Cooldown do botão manual (independente do worker).
+    raw = get_state(db, SYNC_MANUAL_KEY, "")
+    if raw:
+        try:
+            ultima = datetime.fromisoformat(raw)
+            desde = (datetime.now(timezone.utc) - ultima).total_seconds()
+            if desde < SYNC_MANUAL_COOLDOWN_SEG:
+                falta = int(SYNC_MANUAL_COOLDOWN_SEG - desde)
+                m, s = divmod(falta, 60)
+                txt = (f"Aguarde {m}min {s:02d}s para sincronizar manualmente de novo "
+                       f"(o worker automatico segue rodando normalmente)")
+                return RedirectResponse(
+                    f"/dashboard?sync_erro={quote_plus(txt)}", status_code=303)
+        except ValueError:
+            pass
+
     try:
         r = processar(db, force=False)
     except TooSoonError as e:
@@ -641,6 +663,9 @@ def sync_manual(db: Session = Depends(get_db)):
         log.exception("Erro na sincronização manual")
         return RedirectResponse(
             "/dashboard?sync_erro=Falha+na+sincronizacao+%28ver+logs%29", status_code=303)
+
+    # Registra o clique só quando a sincronização de fato ocorreu.
+    set_state(db, SYNC_MANUAL_KEY, datetime.now(timezone.utc).isoformat())
     cont = r.get("contadores", {}) or {}
     novas = cont.get("nfe-diesel", 0) + cont.get("nfe-diesel-nao-venda", 0)
     if novas:
