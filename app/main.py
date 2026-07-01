@@ -27,8 +27,10 @@ from .database import get_db, run_migrations
 from .models import CotaPeriodo, EmailAlerta, NotaFiscal, Usuario
 from .services import periodo as periodo_svc
 from .services.ingest import (
+    TooSoonError,
     UploadInvalido,
     importar_xml_manual,
+    processar,
     status_bloqueio_656,
     ultima_sincronizacao,
 )
@@ -178,11 +180,14 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     poll_label = "a cada hora" if h == 1 else f"a cada {h} horas"
     upload_ok = request.query_params.get("upload_ok")
     upload_erro = request.query_params.get("upload_erro")
+    sync_ok = request.query_params.get("sync_ok")
+    sync_erro = request.query_params.get("sync_erro")
     return render("dashboard.html", request, db, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
                   poll_label=poll_label,
-                  upload_ok=upload_ok, upload_erro=upload_erro)
+                  upload_ok=upload_ok, upload_erro=upload_erro,
+                  sync_ok=sync_ok, sync_erro=sync_erro)
 
 
 def _parse_date(v: str | None, default: date) -> date:
@@ -616,6 +621,33 @@ def excluir_nota(nota_id: int, db: Session = Depends(get_db)):
         db.delete(nf)
         db.commit()
     return RedirectResponse("/dashboard", status_code=303)
+
+
+@app.post("/sync", dependencies=[Depends(require_admin)])
+def sync_manual(db: Session = Depends(get_db)):
+    """Dispara um ciclo de sincronização SEFAZ sob demanda (admin).
+
+    Usa force=False: respeita o intervalo mínimo entre consultas e o
+    bloqueio cStat=656. Se estiver dentro da janela de throttle, não toca
+    no SEFAZ — apenas informa quanto falta. É seguro clicar após reinícios
+    da máquina para puxar NFs atrasadas sem risco de consumo indevido."""
+    from urllib.parse import quote_plus
+    try:
+        r = processar(db, force=False)
+    except TooSoonError as e:
+        return RedirectResponse(
+            f"/dashboard?sync_erro={quote_plus(str(e))}", status_code=303)
+    except Exception:  # noqa: BLE001
+        log.exception("Erro na sincronização manual")
+        return RedirectResponse(
+            "/dashboard?sync_erro=Falha+na+sincronizacao+%28ver+logs%29", status_code=303)
+    cont = r.get("contadores", {}) or {}
+    novas = cont.get("nfe-diesel", 0) + cont.get("nfe-diesel-nao-venda", 0)
+    if novas:
+        msg = f"Sincronizacao OK — {novas} NF(s) de diesel nova(s) importada(s)"
+    else:
+        msg = "Sincronizacao OK — nenhuma NF nova (ja estava tudo em dia)"
+    return RedirectResponse(f"/dashboard?sync_ok={quote_plus(msg)}", status_code=303)
 
 
 @app.post("/notas/upload", dependencies=[Depends(require_login)])

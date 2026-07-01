@@ -194,6 +194,10 @@ button:hover { filter: brightness(1.05); }
 .sync-msg.err, .sync-msg.crit { background: rgba(239, 68, 68, 0.15); color: var(--crit); }
 .sync-msg.inline { display: inline-block; margin-bottom: 1rem; }
 
+.sync-manual { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+               margin: 0.4rem 0 1rem; font-size: 0.85rem; }
+.sync-manual .sync-msg.inline { margin-bottom: 0; }
+
 .upload-box {
   background: var(--panel); border: 1px dashed var(--border);
   padding: 1rem 1.2rem; border-radius: 10px; margin: 1.2rem 0;

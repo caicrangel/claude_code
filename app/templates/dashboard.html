@@ -50,6 +50,19 @@
       Apenas NFe com NCM 2710.19 (óleo diesel) são armazenadas.
     </p>
 
+    {% if is_admin %}
+    <div class="sync-manual">
+      {% if sync_ok %}<div class="sync-msg ok inline">{{ sync_ok }}</div>{% endif %}
+      {% if sync_erro %}<div class="sync-msg warn inline">{{ sync_erro }}</div>{% endif %}
+      <form method="post" action="/sync" style="display:inline">
+        <button type="submit" class="btn-mini" title="Consultar a SEFAZ agora (respeita o intervalo mínimo — não força consumo indevido)">
+          ↻ Sincronizar agora
+        </button>
+      </form>
+      <span class="muted">Puxa NFs pendentes na hora. Útil após reiniciar a máquina.</span>
+    </div>
+    {% endif %}
+
     <div class="upload-box">
       {% if upload_ok %}<div class="sync-msg ok inline">{{ upload_ok }}</div>{% endif %}
       {% if upload_erro %}<div class="sync-msg crit inline">{{ upload_erro }}</div>{% endif %}
