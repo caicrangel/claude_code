@@ -191,9 +191,10 @@ def importar_xml_manual(db: Session, xml_bytes: bytes, *,
     Reutiliza o parser e as regras de filtro/auto-detecção. Se a chave já
     existe no banco, atualiza os metadados (sem sobrescrever excluida_cota).
 
-    `fixar_periodo_id`: quando informado, FIXA a NF a esse período (ela
-    conta na cota dele independente da data de emissão). Usado para incluir
-    uma NF de data anterior numa cota renovada (ex.: liminar).
+    `fixar_periodo_id`: quando informado, INCLUI a NF nesse período (de
+    forma ADITIVA — ela continua contando também no período natural da
+    data). Usado para uma NF que compõe a cota de dois períodos ao mesmo
+    tempo (ex.: período inicial + cota renovada por liminar).
 
     Retorna dicionário com {acao, chave, litros, natureza, fixada}.
     """
@@ -227,9 +228,11 @@ def importar_xml_manual(db: Session, xml_bytes: bytes, *,
     nf.is_resumo = False
     if nova:
         nf.excluida_cota = _e_nao_venda(parsed.natureza_operacao)
-    if fixar_periodo_id is not None:
-        nf.periodo_id = fixar_periodo_id
     db.commit()
+    if fixar_periodo_id is not None:
+        db.refresh(nf)  # garante nf.id
+        from .quota import incluir_nota_periodo
+        incluir_nota_periodo(db, nf.id, fixar_periodo_id)
     return {
         "acao": "criada" if nova else "atualizada",
         "chave": parsed.chave,

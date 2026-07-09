@@ -58,6 +58,21 @@ class NotaFiscal(Base):
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class NotaPeriodo(Base):
+    """Inclusão ADICIONAL de uma NF num período (muitos-para-muitos).
+
+    Uma NF sempre conta no período cuja janela de datas contém a emissão
+    (pertencimento natural). Além disso, ela pode ser incluída
+    explicitamente em outros períodos — cada inclusão é uma linha aqui.
+    Isso permite que a mesma NF componha a cota de dois períodos ao mesmo
+    tempo (ex.: NF que vale para o período inicial E para a cota renovada
+    por liminar)."""
+    __tablename__ = "nota_periodo"
+
+    nota_id = Column(Integer, primary_key=True)
+    periodo_id = Column(Integer, primary_key=True, index=True)
+
+
 class Alerta(Base):
     __tablename__ = "alertas"
 

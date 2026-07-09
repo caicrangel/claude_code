@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from html import escape
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import runtime_config
@@ -32,9 +32,9 @@ PANORAMA_STATE_PREFIX = "panorama_mensal_"
 
 
 def _totais_mes(db: Session, *, periodo, inicio: date, fim: date) -> tuple[Decimal, Decimal]:
-    """(litros, valor) das NFs na cota, restritas ao intervalo do mês e
-    pertencentes a este período (não-fixadas OU fixadas a ele). NFs
-    fixadas a OUTRO período são excluídas do consumo mensal."""
+    """(litros, valor) das NFs na cota, no intervalo do mês. O mês está dentro
+    do período, então a data no mês já é pertencimento natural. NFs incluídas
+    em OUTROS períodos são datadas fora deste mês, logo não aparecem aqui."""
     row = (
         db.query(
             func.coalesce(func.sum(NotaFiscal.litros_diesel), 0),
@@ -43,8 +43,6 @@ def _totais_mes(db: Session, *, periodo, inicio: date, fim: date) -> tuple[Decim
         .filter(
             NotaFiscal.data_emissao >= inicio,
             NotaFiscal.data_emissao <= fim,
-            or_(NotaFiscal.periodo_id.is_(None),
-                NotaFiscal.periodo_id == periodo.id),
             NotaFiscal.is_resumo.is_(False),
             NotaFiscal.cancelada.is_(False),
             NotaFiscal.excluida_cota.is_(False),

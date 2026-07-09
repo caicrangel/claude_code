@@ -168,6 +168,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .order_by(NotaFiscal.data_emissao.desc().nullslast())
         .limit(200).all()
     )
+    from .services.quota import incluidas_do_periodo
+    incluidas_ids = incluidas_do_periodo(db, p.id)
     bloqueio = status_bloqueio_656(db)
     ultima_sync = ultima_sincronizacao(db)
     h = settings.SYNC_INTERVALO_HORAS
@@ -179,7 +181,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     return render("dashboard.html", request, db, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
-                  poll_label=poll_label,
+                  poll_label=poll_label, incluidas_ids=incluidas_ids,
                   upload_ok=upload_ok, upload_erro=upload_erro,
                   sync_ok=sync_ok, sync_erro=sync_erro)
 
@@ -752,24 +754,29 @@ async def upload_xml(
             "/dashboard?upload_erro=Erro+ao+processar+XML", status_code=303)
     msg = (f"NF+{r['acao']}+%28{r['litros']:.0f}+L%29"
            + ("+marcada+como+fora+da+cota" if r["excluida_cota"] else "+incluida+na+cota")
-           + ("+e+FIXADA+neste+periodo" if r["fixada"] else ""))
+           + ("+e+tambem+incluida+neste+periodo" if r["fixada"] else ""))
     _reavaliar_alertas(db)
     return RedirectResponse(f"/dashboard?upload_ok={msg}", status_code=303)
 
 
 @app.post("/notas/{nota_id}/fixar-periodo", dependencies=[Depends(require_login)])
 def fixar_periodo_nota(nota_id: int, db: Session = Depends(get_db)):
-    """Alterna a fixação de uma NF ao período ATIVO.
+    """Alterna a INCLUSÃO (aditiva) de uma NF no período ATIVO.
 
-    - NF ainda não fixada → fixa ao período ativo (passa a contar na cota
-      dele independente da data).
-    - NF já fixada ao período ativo → solta (volta a valer pela data).
+    - NF ainda não incluída → inclui no período ativo (passa a compor a cota
+      dele SEM sair do período natural da data).
+    - NF já incluída → remove a inclusão.
     Idempotente e reversível."""
+    from .services.quota import (
+        esta_incluida, incluir_nota_periodo, remover_nota_periodo,
+    )
     nf = db.get(NotaFiscal, nota_id)
     p = periodo_svc.get_periodo_ativo(db)
     if nf is not None and p is not None:
-        nf.periodo_id = None if nf.periodo_id == p.id else p.id
-        db.commit()
+        if esta_incluida(db, nf.id, p.id):
+            remover_nota_periodo(db, nf.id, p.id)
+        else:
+            incluir_nota_periodo(db, nf.id, p.id)
         _reavaliar_alertas(db)
     return RedirectResponse("/dashboard", status_code=303)
 

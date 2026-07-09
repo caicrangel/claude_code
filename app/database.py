@@ -28,6 +28,23 @@ _MIGRATIONS = [
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS periodo_id INTEGER",
     "CREATE INDEX IF NOT EXISTS ix_notas_nsu ON notas_fiscais(nsu)",
     "CREATE INDEX IF NOT EXISTS ix_notas_periodo_id ON notas_fiscais(periodo_id)",
+    # Modelo aditivo de inclusão em período (muitos-para-muitos).
+    """
+    CREATE TABLE IF NOT EXISTS nota_periodo (
+        nota_id INTEGER NOT NULL,
+        periodo_id INTEGER NOT NULL,
+        PRIMARY KEY (nota_id, periodo_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_nota_periodo_periodo ON nota_periodo(periodo_id)",
+    # Migra o antigo pin exclusivo (notas_fiscais.periodo_id) para inclusão.
+    """
+    INSERT INTO nota_periodo (nota_id, periodo_id)
+    SELECT id, periodo_id FROM notas_fiscais WHERE periodo_id IS NOT NULL
+    ON CONFLICT DO NOTHING
+    """,
+    # Zera o pin antigo para não recriar a inclusão em toda subida.
+    "UPDATE notas_fiscais SET periodo_id = NULL WHERE periodo_id IS NOT NULL",
     # Consolida NSUs antigos (multi-UF) no NSU único (single-UF)
     """
     INSERT INTO state (key, value)

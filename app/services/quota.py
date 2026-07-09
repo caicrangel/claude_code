@@ -6,12 +6,12 @@ from datetime import date
 from decimal import Decimal
 from html import escape
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from .. import runtime_config
 from ..format import fmt_data_curta, fmt_litros, fmt_pct
-from ..models import Alerta, CotaPeriodo, EmailAlerta, NotaFiscal
+from ..models import Alerta, CotaPeriodo, EmailAlerta, NotaFiscal, NotaPeriodo
 from .email import send_email
 from .logo_email import bloco_html as bloco_logo
 from .logo_email import logo_para_email
@@ -25,23 +25,52 @@ def cond_pertence_periodo(periodo: CotaPeriodo, inicio: date | None = None,
                           fim: date | None = None):
     """Condição SQLAlchemy: a NF pertence a este período para efeito de cota.
 
-    Regra:
-      - Fixada explicitamente ao período (periodo_id == periodo.id), OU
-      - Não-fixada (periodo_id IS NULL) e com data_emissao dentro do intervalo.
+    Modelo ADITIVO:
+      - Pertencimento natural: data_emissao dentro do intervalo do período, OU
+      - Inclusão explícita: existe linha em nota_periodo (nota, período).
 
-    Uma NF fixada a um período NÃO conta em nenhum outro (evita dupla
-    contagem). `inicio`/`fim` permitem restringir o intervalo de datas
-    (relatórios com subperíodo); NFs fixadas entram sempre."""
+    A inclusão é ADITIVA — não remove a NF do período natural dela. Assim a
+    mesma NF pode compor a cota de dois períodos (ex.: período inicial +
+    cota renovada por liminar). `inicio`/`fim` restringem o intervalo de
+    datas (relatórios); as NFs incluídas explicitamente entram sempre."""
     ini = inicio if inicio is not None else periodo.inicio
     f = fim if fim is not None else periodo.fim
+    incluidas = select(NotaPeriodo.nota_id).where(
+        NotaPeriodo.periodo_id == periodo.id)
     return or_(
-        NotaFiscal.periodo_id == periodo.id,
         and_(
-            NotaFiscal.periodo_id.is_(None),
             NotaFiscal.data_emissao >= ini,
             NotaFiscal.data_emissao <= f,
         ),
+        NotaFiscal.id.in_(incluidas),
     )
+
+
+def incluir_nota_periodo(db: Session, nota_id: int, periodo_id: int) -> None:
+    """Inclui a NF no período (idempotente)."""
+    existe = db.get(NotaPeriodo, {"nota_id": nota_id, "periodo_id": periodo_id})
+    if existe is None:
+        db.add(NotaPeriodo(nota_id=nota_id, periodo_id=periodo_id))
+        db.commit()
+
+
+def remover_nota_periodo(db: Session, nota_id: int, periodo_id: int) -> None:
+    """Remove a inclusão da NF no período (idempotente)."""
+    existe = db.get(NotaPeriodo, {"nota_id": nota_id, "periodo_id": periodo_id})
+    if existe is not None:
+        db.delete(existe)
+        db.commit()
+
+
+def esta_incluida(db: Session, nota_id: int, periodo_id: int) -> bool:
+    return db.get(NotaPeriodo, {"nota_id": nota_id, "periodo_id": periodo_id}) is not None
+
+
+def incluidas_do_periodo(db: Session, periodo_id: int) -> set[int]:
+    """IDs das NFs incluídas EXPLICITAMENTE neste período."""
+    rows = db.query(NotaPeriodo.nota_id).filter(
+        NotaPeriodo.periodo_id == periodo_id).all()
+    return {r[0] for r in rows}
 
 
 def litros_consumidos(db: Session, *, periodo: CotaPeriodo | None = None,
