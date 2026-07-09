@@ -155,7 +155,10 @@ def _grafico_fornecedores(ax, fornecedores) -> None:
                 transform=ax.transAxes)
         ax.axis("off")
         return
-    nomes = [(f.emitente_nome or f.emitente_cnpj or "—")[:35] for f in fornecedores]
+    def _abrev(s: str, lim: int = 26) -> str:
+        s = s or "—"
+        return s if len(s) <= lim else s[:lim - 1].rstrip() + "…"
+    nomes = [_abrev(f.emitente_nome or f.emitente_cnpj or "—") for f in fornecedores]
     litros = [float(f.litros or 0) for f in fornecedores]
     nomes_inv = list(reversed(nomes))
     litros_inv = list(reversed(litros))
@@ -201,7 +204,7 @@ def _pagina_graficos(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo) -> Non
     mensal = _consumo_mensal(db, periodo)
     fig, axes = plt.subplots(2, 1, figsize=(8.27, 11.69),
                              gridspec_kw={"height_ratios": [1.2, 1]})
-    fig.subplots_adjust(left=0.18, right=0.92, top=0.94, bottom=0.08, hspace=0.35)
+    fig.subplots_adjust(left=0.30, right=0.94, top=0.94, bottom=0.08, hspace=0.35)
     _grafico_fornecedores(axes[0], fornecedores)
     _grafico_mensal(axes[1], mensal)
     pdf.savefig(fig)
