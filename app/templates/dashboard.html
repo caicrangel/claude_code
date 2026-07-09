@@ -102,10 +102,12 @@
             <td class="num">{{ n.litros_diesel|numero }}</td>
             <td class="num">{{ n.valor_total|numero }}</td>
             <td class="center">
-              {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
-              {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
-              {% else %}<span class="tag tag-ok">na cota</span>{% endif %}
-              {% if n.periodo_id %}<br><span class="tag tag-fixada" title="NF fixada manualmente a este período">📌 fixada</span>{% endif %}
+              <div class="status-tags">
+                {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
+                {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
+                {% else %}<span class="tag tag-ok">na cota</span>{% endif %}
+                {% if n.periodo_id %}<span class="tag tag-fixada" title="NF fixada manualmente a este período">📌 fixada</span>{% endif %}
+              </div>
             </td>
             <td class="acoes">
               {% if not n.cancelada %}
