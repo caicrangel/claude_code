@@ -54,6 +54,11 @@
                 <form method="post" action="/configuracao/ativar/{{ p.id }}?aba=periodos" style="display:inline">
                   <button type="submit" class="btn-mini">reativar</button>
                 </form>
+                <form method="post" action="/configuracao/periodos/{{ p.id }}/excluir?aba=periodos"
+                      style="display:inline"
+                      onsubmit="return confirm('Excluir o período &quot;{{ p.nome or '—' }}&quot; ({{ p.inicio|data_curta }} → {{ p.fim|data_curta }})?\n\nAs NFs NÃO são apagadas — só a definição do período. Use para remover períodos criados por engano.');">
+                  <button type="submit" class="btn-mini btn-danger" title="Excluir período">✕ excluir</button>
+                </form>
               {% endif %}
             </td>
           </tr>

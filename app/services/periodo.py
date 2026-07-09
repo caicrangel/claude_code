@@ -45,3 +45,24 @@ def ativar(db: Session, periodo_id: int) -> CotaPeriodo | None:
     db.commit()
     db.refresh(p)
     return p
+
+
+class PeriodoAtivoError(RuntimeError):
+    """Levantada ao tentar excluir o período ativo."""
+
+
+def excluir(db: Session, periodo_id: int) -> bool:
+    """Exclui um período arquivado (criado por engano, por exemplo).
+
+    NÃO apaga NFs — elas não têm vínculo direto com períodos (são
+    filtradas por data). Recusa excluir o período ativo. Retorna True se
+    excluiu, False se o período não existe."""
+    p = get_periodo(db, periodo_id)
+    if p is None:
+        return False
+    if p.ativo:
+        raise PeriodoAtivoError(
+            "Não é possível excluir o período ativo. Ative outro antes.")
+    db.delete(p)
+    db.commit()
+    return True

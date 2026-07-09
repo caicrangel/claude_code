@@ -373,6 +373,19 @@ def config_ativar(periodo_id: int, request: Request, db: Session = Depends(get_d
     return _config_redirect(request, msg="Periodo ativado")
 
 
+@app.post("/configuracao/periodos/{periodo_id}/excluir",
+          dependencies=[Depends(require_admin)])
+def config_periodo_excluir(periodo_id: int, request: Request,
+                           db: Session = Depends(get_db)):
+    try:
+        ok = periodo_svc.excluir(db, periodo_id)
+    except periodo_svc.PeriodoAtivoError as e:
+        return _config_redirect(request, erro=str(e))
+    if not ok:
+        return _config_redirect(request, erro="Periodo nao encontrado")
+    return _config_redirect(request, msg="Periodo excluido")
+
+
 # ---- usuários ----
 
 @app.post("/configuracao/usuarios/novo", dependencies=[Depends(require_admin)])
