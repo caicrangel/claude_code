@@ -10,6 +10,7 @@ from ..database import SessionLocal
 log = logging.getLogger(__name__)
 
 Attachment = tuple[str, bytes, str]  # (filename, content, mimetype "type/subtype")
+InlineImage = tuple[str, bytes, str]  # (cid, content, mimetype) — referenciado no HTML por cid:<cid>
 
 
 def _smtp_efetivo(db: Session | None) -> dict:
@@ -36,9 +37,13 @@ def send_email(
     *,
     html_body: str | None = None,
     attachments: list[Attachment] | None = None,
+    inline_images: list[InlineImage] | None = None,
     db: Session | None = None,
 ) -> bool:
     """Envia e-mail com corpo texto + alternativa HTML opcional + anexos opcionais.
+
+    `inline_images` são imagens embutidas (ex.: logo) referenciadas no HTML
+    por `cid:<cid>` — método confiável em Gmail/Outlook (data: URI é bloqueado).
 
     `db` é usado para ler a configuração SMTP do banco (com fallback .env).
     Quando omitido, abre uma sessão própria — assim handlers/jobs que não
@@ -64,6 +69,15 @@ def send_email(
     msg.set_content(body)
     if html_body:
         msg.add_alternative(html_body, subtype="html")
+        # Imagens inline (cid) ficam num multipart/related junto da parte HTML.
+        if inline_images:
+            html_part = msg.get_payload()[-1]  # a alternativa HTML
+            for cid, content, mimetype in inline_images:
+                maintype, _, subtype = mimetype.partition("/")
+                html_part.add_related(content, maintype=maintype or "image",
+                                      subtype=subtype or "png")
+                related = html_part.get_payload()[-1]
+                related.add_header("Content-ID", f"<{cid}>")
     for filename, content, mimetype in attachments or []:
         maintype, _, subtype = mimetype.partition("/")
         msg.add_attachment(content, maintype=maintype or "application",

@@ -13,6 +13,8 @@ from .. import runtime_config
 from ..format import fmt_data_curta, fmt_litros, fmt_pct
 from ..models import Alerta, CotaPeriodo, EmailAlerta, NotaFiscal
 from .email import send_email
+from .logo_email import bloco_html as bloco_logo
+from .logo_email import logo_para_email
 from .periodo import get_periodo_ativo
 from .report_pdf import gerar_pdf_alerta
 
@@ -83,7 +85,8 @@ def _montar_corpo_texto(db: Session, p: CotaPeriodo, consumo: Decimal, cota: Dec
 
 
 def _montar_corpo_html(db: Session, p: CotaPeriodo, consumo: Decimal, cota: Decimal,
-                       pct: float, restante: Decimal, thr: int) -> str:
+                       pct: float, restante: Decimal, thr: int,
+                       logo_html: str = "") -> str:
     cor_alerta = "#dc2626" if thr >= 100 else ("#d97706" if thr >= 85 else "#0284c7")
     cor_uso = "#dc2626" if pct >= 95 else ("#d97706" if pct >= 70 else "#16a34a")
     pct_fill = min(pct, 100.0)
@@ -103,6 +106,7 @@ def _montar_corpo_html(db: Session, p: CotaPeriodo, consumo: Decimal, cota: Deci
       Limite atingido: {thr}% da cota
     </td></tr>
     <tr><td style="padding:24px;">
+      {logo_html}
       <div style="font-size:16px;font-weight:600;margin-bottom:4px;">{empresa}</div>
       <div style="font-size:13px;color:#64748b;margin-bottom:20px;">CNPJ {cnpj}</div>
 
@@ -171,6 +175,8 @@ def avaliar_e_alertar(db: Session) -> dict:
         if (e.email or "").strip()
     ]
     nome_empresa = runtime_config.empresa_nome(db)
+    logo_src, logo_img = logo_para_email(db)
+    logo_html = bloco_logo(logo_src)
     for thr in runtime_config.thresholds(db):
         if pct < thr:
             continue
@@ -181,7 +187,7 @@ def avaliar_e_alertar(db: Session) -> dict:
         if existe:
             continue
         msg_text = _montar_corpo_texto(db, p, consumo, cota, pct, restante, thr)
-        msg_html = _montar_corpo_html(db, p, consumo, cota, pct, restante, thr)
+        msg_html = _montar_corpo_html(db, p, consumo, cota, pct, restante, thr, logo_html)
         try:
             pdf_bytes = gerar_pdf_alerta(
                 db, periodo=p, consumo=consumo, cota=cota,
@@ -202,6 +208,7 @@ def avaliar_e_alertar(db: Session) -> dict:
                 body=msg_text,
                 html_body=msg_html,
                 attachments=anexos or None,
+                inline_images=[logo_img] if logo_img else None,
                 db=db,
             )
             ok_any = ok_any or ok

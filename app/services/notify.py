@@ -20,6 +20,8 @@ from .. import runtime_config
 from ..format import fmt_data, fmt_data_curta, fmt_litros, fmt_moeda, fmt_pct
 from ..models import EmailAlerta, NotaFiscal, get_state, set_state
 from .email import send_email
+from .logo_email import bloco_html as bloco_logo
+from .logo_email import logo_para_email
 from .periodo import get_periodo_ativo
 from .quota import litros_consumidos, percentual
 from .report_pdf import gerar_pdf_panorama
@@ -63,7 +65,7 @@ def _destinatarios_ativos(db: Session) -> list[str]:
 # ---------- NFs novas (agrupado por ciclo) ----------
 
 def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
-                    resumo_cota: dict) -> str:
+                    resumo_cota: dict, logo_html: str = "") -> str:
     pct = float(resumo_cota.get("pct") or 0)
     consumo = Decimal(str(resumo_cota.get("consumo") or 0))
     cota = Decimal(str(resumo_cota.get("cota") or 0))
@@ -99,6 +101,7 @@ def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
       {len(nfs)} nova{'s' if len(nfs) > 1 else ''} NF de diesel registrada{'s' if len(nfs) > 1 else ''}
     </td></tr>
     <tr><td style="padding:24px;">
+      {logo_html}
       <div style="font-size:16px;font-weight:600;">{escape(empresa)}</div>
       <div style="font-size:13px;color:#64748b;margin-bottom:18px;">CNPJ {escape(cnpj)}</div>
 
@@ -186,11 +189,14 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict) -
     pct = float(resumo_cota.get("pct") or 0)
     subject = (f"[Cota Diesel] {empresa} — {len(nfs)} nova{'s' if len(nfs) > 1 else ''} "
                f"NF · {fmt_pct(pct)} da cota")
+    logo_src, logo_img = logo_para_email(db)
     text = _texto_nfs_novas(empresa, cnpj, nfs, resumo_cota)
-    html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota)
+    html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota, bloco_logo(logo_src))
+    inline = [logo_img] if logo_img else None
     enviados = 0
     for dest in destinatarios:
-        if send_email(to=dest, subject=subject, body=text, html_body=html, db=db):
+        if send_email(to=dest, subject=subject, body=text, html_body=html,
+                      inline_images=inline, db=db):
             enviados += 1
     log.info("Notificação de NFs novas: %d NFs → %d/%d destinatários OK",
              len(nfs), enviados, len(destinatarios))
@@ -275,18 +281,21 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
         f"Restante da cota: {fmt_litros(restante)} de {fmt_litros(cota)}\n\n"
         f"Veja o PDF anexo para o relatório completo com gráficos."
     )
+    logo_src, logo_img = logo_para_email(db)
     html = _html_panorama(empresa, cnpj, p, ini_efetivo, fim_efetivo,
                           consumo_mes, valor_mes, preco_medio_mes,
-                          consumo_acum, cota, pct_acum, restante)
+                          consumo_acum, cota, pct_acum, restante,
+                          bloco_logo(logo_src))
     anexos = []
     if pdf_bytes:
         nome_pdf = f"panorama-{inicio.strftime('%Y-%m')}.pdf"
         anexos.append((nome_pdf, pdf_bytes, "application/pdf"))
+    inline = [logo_img] if logo_img else None
 
     enviados = 0
     for dest in destinatarios:
         if send_email(to=dest, subject=subject, body=text, html_body=html,
-                      attachments=anexos or None, db=db):
+                      attachments=anexos or None, inline_images=inline, db=db):
             enviados += 1
 
     if enviados:
@@ -301,7 +310,8 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
 def _html_panorama(empresa: str, cnpj: str, periodo, ini_mes: date, fim_mes: date,
                    consumo_mes: Decimal, valor_mes: Decimal,
                    preco_medio_mes: Decimal, consumo_acum: Decimal,
-                   cota: Decimal, pct_acum: float, restante: Decimal) -> str:
+                   cota: Decimal, pct_acum: float, restante: Decimal,
+                   logo_html: str = "") -> str:
     cor_uso = "#dc2626" if pct_acum >= 95 else ("#d97706" if pct_acum >= 70 else "#16a34a")
     pct_fill = min(pct_acum, 100.0)
     mes_label = ini_mes.strftime("%m/%Y")
@@ -319,6 +329,7 @@ def _html_panorama(empresa: str, cnpj: str, periodo, ini_mes: date, fim_mes: dat
       Panorama de {escape(mes_label)}
     </td></tr>
     <tr><td style="padding:24px;">
+      {logo_html}
       <div style="font-size:16px;font-weight:600;">{escape(empresa)}</div>
       <div style="font-size:13px;color:#64748b;margin-bottom:20px;">CNPJ {escape(cnpj)}</div>
 
