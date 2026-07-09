@@ -38,6 +38,26 @@ def _base_query(db: Session, periodo: CotaPeriodo):
     )
 
 
+def _desenhar_logo(fig, db: Session) -> None:
+    """Desenha a logo da empresa no canto superior direito da página.
+    Silencioso se não houver logo ou o arquivo não puder ser lido."""
+    from .logo_email import logo_para_email
+    _, inline = logo_para_email(db)  # (cid, bytes, mimetype) para arquivo local
+    if inline is None:
+        return
+    try:
+        import matplotlib.image as mpimg
+        img = mpimg.imread(BytesIO(inline[1]))
+    except Exception:  # noqa: BLE001
+        return
+    # Caixa em coords da figura (canto sup. direito), sem distorcer (aspect equal).
+    ax = fig.add_axes([0.60, 0.895, 0.32, 0.06], zorder=10)
+    ax.imshow(img)
+    ax.set_aspect("equal")
+    ax.set_anchor("E")
+    ax.axis("off")
+
+
 def _top_fornecedores(db: Session, periodo: CotaPeriodo, limite: int = 10):
     rows = (
         _base_query(db, periodo)
@@ -75,6 +95,7 @@ def _pagina_resumo(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
                    threshold: int) -> None:
     fig, ax = plt.subplots(figsize=(8.27, 11.69))  # A4 retrato
     ax.axis("off")
+    _desenhar_logo(fig, db)
 
     # Título
     fig.text(0.08, 0.94, "Relatório de Cota — Diesel", fontsize=20, fontweight="bold",
@@ -217,6 +238,7 @@ def _pagina_panorama(pdf: PdfPages, *, db: Session, periodo: CotaPeriodo,
     """Página resumo do panorama mensal — sem faixa de alerta de limite."""
     fig, ax = plt.subplots(figsize=(8.27, 11.69))
     ax.axis("off")
+    _desenhar_logo(fig, db)
 
     fig.text(0.08, 0.94, "Panorama Mensal — Diesel", fontsize=20, fontweight="bold",
              color="#0f172a")
