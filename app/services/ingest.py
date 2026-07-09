@@ -184,12 +184,18 @@ class UploadInvalido(ValueError):
     pass
 
 
-def importar_xml_manual(db: Session, xml_bytes: bytes) -> dict:
+def importar_xml_manual(db: Session, xml_bytes: bytes, *,
+                        fixar_periodo_id: int | None = None) -> dict:
     """Importa uma NFe enviada manualmente pelo usuário.
 
     Reutiliza o parser e as regras de filtro/auto-detecção. Se a chave já
     existe no banco, atualiza os metadados (sem sobrescrever excluida_cota).
-    Retorna dicionário com {acao, chave, litros, natureza}.
+
+    `fixar_periodo_id`: quando informado, FIXA a NF a esse período (ela
+    conta na cota dele independente da data de emissão). Usado para incluir
+    uma NF de data anterior numa cota renovada (ex.: liminar).
+
+    Retorna dicionário com {acao, chave, litros, natureza, fixada}.
     """
     parsed = parse_nfe(xml_bytes)
     if parsed is None:
@@ -221,6 +227,8 @@ def importar_xml_manual(db: Session, xml_bytes: bytes) -> dict:
     nf.is_resumo = False
     if nova:
         nf.excluida_cota = _e_nao_venda(parsed.natureza_operacao)
+    if fixar_periodo_id is not None:
+        nf.periodo_id = fixar_periodo_id
     db.commit()
     return {
         "acao": "criada" if nova else "atualizada",
@@ -228,6 +236,7 @@ def importar_xml_manual(db: Session, xml_bytes: bytes) -> dict:
         "litros": float(parsed.litros_diesel),
         "natureza": parsed.natureza_operacao,
         "excluida_cota": nf.excluida_cota,
+        "fixada": fixar_periodo_id is not None,
     }
 
 

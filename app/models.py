@@ -48,6 +48,12 @@ class NotaFiscal(Base):
     # bonificação). Pode ser definido automaticamente pela natureza_operacao
     # ou alternado manualmente pelo usuário.
     excluida_cota = Column(Boolean, default=False, nullable=False)
+    # Vínculo manual de período. NULL = a NF pertence ao período cuja janela
+    # de datas contém data_emissao (comportamento padrão). Quando preenchido,
+    # a NF é FIXADA a esse período (conta na cota dele independente da data)
+    # e deixa de contar em qualquer outro — evita dupla contagem. Usado para
+    # incluir NFs de período anterior numa cota renovada (ex.: liminar).
+    periodo_id = Column(Integer, index=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

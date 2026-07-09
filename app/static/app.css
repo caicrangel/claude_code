@@ -206,6 +206,10 @@ button:hover { filter: brightness(1.05); }
 .upload-label { display: flex; flex-direction: column; gap: 0.2rem; min-width: 240px; flex: 1; }
 .upload-label .muted { font-size: 0.82rem; }
 .upload-form input[type="file"] { padding: 0.3rem; }
+.upload-check { display: inline-flex; align-items: center; gap: 0.4rem;
+                font-size: 0.82rem; color: var(--muted); cursor: pointer;
+                text-transform: none; letter-spacing: 0; }
+.upload-check input { width: auto; }
 
 /* === Projeção === */
 .projecao {
@@ -219,6 +223,7 @@ button:hover { filter: brightness(1.05); }
 .tag-ok   { background: rgba(34,197,94,0.15);  color: var(--ok); }
 .tag-warn { background: rgba(245,158,11,0.15); color: var(--warn); }
 .tag-crit { background: rgba(239,68,68,0.15);  color: var(--crit); }
+.tag-fixada { background: rgba(56,189,248,0.15); color: var(--accent); margin-left: 0; margin-top: 0.2rem; }
 
 /* === Charts === */
 .charts { display: grid; gap: 1rem; grid-template-columns: 1.4fr 1.4fr 1fr; margin: 1rem 0 2rem; }

@@ -28,9 +28,10 @@ from ..models import CotaPeriodo, NotaFiscal
 
 
 def _base_query(db: Session, periodo: CotaPeriodo):
+    # Import local para evitar ciclo (quota importa report_pdf).
+    from .quota import cond_pertence_periodo
     return db.query(NotaFiscal).filter(
-        NotaFiscal.data_emissao >= periodo.inicio,
-        NotaFiscal.data_emissao <= periodo.fim,
+        cond_pertence_periodo(periodo),
         NotaFiscal.is_resumo.is_(False),
         NotaFiscal.cancelada.is_(False),
         NotaFiscal.excluida_cota.is_(False),

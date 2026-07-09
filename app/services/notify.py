@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from html import escape
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .. import runtime_config
@@ -29,20 +29,27 @@ log = logging.getLogger(__name__)
 PANORAMA_STATE_PREFIX = "panorama_mensal_"
 
 
-def _valor_consumido(db: Session, *, inicio: date, fim: date) -> Decimal:
-    """Soma o valor_total das NFs que entram na cota no intervalo."""
-    total = (
-        db.query(func.coalesce(func.sum(NotaFiscal.valor_total), 0))
+def _totais_mes(db: Session, *, periodo, inicio: date, fim: date) -> tuple[Decimal, Decimal]:
+    """(litros, valor) das NFs na cota, restritas ao intervalo do mês e
+    pertencentes a este período (não-fixadas OU fixadas a ele). NFs
+    fixadas a OUTRO período são excluídas do consumo mensal."""
+    row = (
+        db.query(
+            func.coalesce(func.sum(NotaFiscal.litros_diesel), 0),
+            func.coalesce(func.sum(NotaFiscal.valor_total), 0),
+        )
         .filter(
             NotaFiscal.data_emissao >= inicio,
             NotaFiscal.data_emissao <= fim,
+            or_(NotaFiscal.periodo_id.is_(None),
+                NotaFiscal.periodo_id == periodo.id),
             NotaFiscal.is_resumo.is_(False),
             NotaFiscal.cancelada.is_(False),
             NotaFiscal.excluida_cota.is_(False),
         )
-        .scalar()
+        .one()
     )
-    return Decimal(total or 0)
+    return Decimal(row[0] or 0), Decimal(row[1] or 0)
 
 
 def _destinatarios_ativos(db: Session) -> list[str]:
@@ -231,12 +238,12 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
     if not destinatarios:
         return {"enviado": False, "motivo": "sem-destinatarios"}
 
-    # KPIs do mês de referência
-    consumo_mes = litros_consumidos(db, inicio=ini_efetivo, fim=fim_efetivo)
-    valor_mes = _valor_consumido(db, inicio=ini_efetivo, fim=fim_efetivo)
+    # KPIs do mês de referência (fatia mensal, ciente de fixação de período)
+    consumo_mes, valor_mes = _totais_mes(db, periodo=p,
+                                         inicio=ini_efetivo, fim=fim_efetivo)
     preco_medio_mes = (valor_mes / consumo_mes) if consumo_mes else Decimal(0)
-    # KPIs acumulados do período inteiro até o fim do mês
-    consumo_acum = litros_consumidos(db, inicio=p.inicio, fim=fim_efetivo)
+    # KPIs acumulados do período inteiro até o fim do mês (ciente de fixação)
+    consumo_acum = litros_consumidos(db, periodo=p, inicio=p.inicio, fim=fim_efetivo)
     cota = Decimal(p.cota_litros or 0)
     pct_acum = percentual(consumo_acum, cota)
     restante = cota - consumo_acum

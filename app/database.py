@@ -25,7 +25,9 @@ _MIGRATIONS = [
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP",
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS natureza_operacao VARCHAR(200)",
     "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS excluida_cota BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS periodo_id INTEGER",
     "CREATE INDEX IF NOT EXISTS ix_notas_nsu ON notas_fiscais(nsu)",
+    "CREATE INDEX IF NOT EXISTS ix_notas_periodo_id ON notas_fiscais(periodo_id)",
     # Consolida NSUs antigos (multi-UF) no NSU único (single-UF)
     """
     INSERT INTO state (key, value)

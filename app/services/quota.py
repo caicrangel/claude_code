@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from html import escape
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from .. import runtime_config
@@ -19,18 +19,39 @@ from .report_pdf import gerar_pdf_alerta
 log = logging.getLogger(__name__)
 
 
-def litros_consumidos(db: Session, *, inicio: date | None = None,
-                      fim: date | None = None) -> Decimal:
-    if inicio is None or fim is None:
-        p = get_periodo_ativo(db)
-        if p is None:
+def cond_pertence_periodo(periodo: CotaPeriodo, inicio: date | None = None,
+                          fim: date | None = None):
+    """Condição SQLAlchemy: a NF pertence a este período para efeito de cota.
+
+    Regra:
+      - Fixada explicitamente ao período (periodo_id == periodo.id), OU
+      - Não-fixada (periodo_id IS NULL) e com data_emissao dentro do intervalo.
+
+    Uma NF fixada a um período NÃO conta em nenhum outro (evita dupla
+    contagem). `inicio`/`fim` permitem restringir o intervalo de datas
+    (relatórios com subperíodo); NFs fixadas entram sempre."""
+    ini = inicio if inicio is not None else periodo.inicio
+    f = fim if fim is not None else periodo.fim
+    return or_(
+        NotaFiscal.periodo_id == periodo.id,
+        and_(
+            NotaFiscal.periodo_id.is_(None),
+            NotaFiscal.data_emissao >= ini,
+            NotaFiscal.data_emissao <= f,
+        ),
+    )
+
+
+def litros_consumidos(db: Session, *, periodo: CotaPeriodo | None = None,
+                      inicio: date | None = None, fim: date | None = None) -> Decimal:
+    if periodo is None:
+        periodo = get_periodo_ativo(db)
+        if periodo is None:
             return Decimal(0)
-        inicio, fim = p.inicio, p.fim
     total = (
         db.query(func.coalesce(func.sum(NotaFiscal.litros_diesel), 0))
         .filter(
-            NotaFiscal.data_emissao >= inicio,
-            NotaFiscal.data_emissao <= fim,
+            cond_pertence_periodo(periodo, inicio, fim),
             NotaFiscal.is_resumo.is_(False),
             NotaFiscal.cancelada.is_(False),
             NotaFiscal.excluida_cota.is_(False),
@@ -137,7 +158,7 @@ def avaliar_e_alertar(db: Session) -> dict:
     if p is None:
         return {"consumo": 0.0, "cota": 0.0, "pct": 0.0, "restante": 0.0,
                 "alertas_disparados": []}
-    consumo = litros_consumidos(db, inicio=p.inicio, fim=p.fim)
+    consumo = litros_consumidos(db, periodo=p)
     cota = Decimal(p.cota_litros or 0)
     pct = percentual(consumo, cota)
     restante = cota - consumo

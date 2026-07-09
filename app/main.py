@@ -34,7 +34,12 @@ from .services.ingest import (
     status_bloqueio_656,
     ultima_sincronizacao,
 )
-from .services.quota import avaliar_e_alertar, litros_consumidos, percentual
+from .services.quota import (
+    avaliar_e_alertar,
+    cond_pertence_periodo,
+    litros_consumidos,
+    percentual,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -126,27 +131,21 @@ def _kpis(db: Session, p: CotaPeriodo, inicio: date | None = None,
         inicio = p.inicio
     if fim is None:
         fim = p.fim
-    consumo = litros_consumidos(db, inicio=inicio, fim=fim)
+    consumo = litros_consumidos(db, periodo=p, inicio=inicio, fim=fim)
     cota = Decimal(p.cota_litros or 0)
     pct = percentual(consumo, cota)
     restante = cota - consumo
     status = "ok" if pct < 70 else ("warn" if pct < 95 else "crit")
+    membros = cond_pertence_periodo(p, inicio, fim)
     canceladas = (
         db.query(NotaFiscal)
-        .filter(
-            NotaFiscal.data_emissao >= inicio,
-            NotaFiscal.data_emissao <= fim,
-            NotaFiscal.cancelada.is_(True),
-        ).count()
+        .filter(membros, NotaFiscal.cancelada.is_(True)).count()
     )
     excluidas = (
         db.query(NotaFiscal)
-        .filter(
-            NotaFiscal.data_emissao >= inicio,
-            NotaFiscal.data_emissao <= fim,
-            NotaFiscal.cancelada.is_(False),
-            NotaFiscal.excluida_cota.is_(True),
-        ).count()
+        .filter(membros,
+                NotaFiscal.cancelada.is_(False),
+                NotaFiscal.excluida_cota.is_(True)).count()
     )
     return {
         "consumo": consumo, "cota": cota, "pct": pct, "restante": restante,
@@ -161,16 +160,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     if p is None:
         return RedirectResponse("/configuracao", status_code=303)
     k = _kpis(db, p)
-    total_notas = (
-        db.query(NotaFiscal)
-        .filter(NotaFiscal.data_emissao >= p.inicio,
-                NotaFiscal.data_emissao <= p.fim)
-        .count()
-    )
+    membros = cond_pertence_periodo(p)
+    total_notas = db.query(NotaFiscal).filter(membros).count()
     notas = (
         db.query(NotaFiscal)
-        .filter(NotaFiscal.data_emissao >= p.inicio,
-                NotaFiscal.data_emissao <= p.fim)
+        .filter(membros)
         .order_by(NotaFiscal.data_emissao.desc().nullslast())
         .limit(200).all()
     )
@@ -225,7 +219,7 @@ def relatorios(
     k = _kpis(db, sel, inicio=ini, fim=fim_d)
 
     base = db.query(NotaFiscal).filter(
-        NotaFiscal.data_emissao >= ini, NotaFiscal.data_emissao <= fim_d,
+        cond_pertence_periodo(sel, ini, fim_d),
         NotaFiscal.is_resumo.is_(False), NotaFiscal.cancelada.is_(False),
         NotaFiscal.excluida_cota.is_(False),
     )
@@ -689,9 +683,17 @@ def sync_manual(db: Session = Depends(get_db)):
 
 
 @app.post("/notas/upload", dependencies=[Depends(require_login)])
-async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_xml(
+    arquivo: UploadFile = File(...),
+    fixar_periodo: str = Form(""),
+    db: Session = Depends(get_db),
+):
     """Upload manual de XML de NFe (para casos que a SEFAZ não trouxe ou
-    que a auto-detecção da natureza precisa ser revisada)."""
+    que a auto-detecção da natureza precisa ser revisada).
+
+    Se `fixar_periodo` vier marcado, a NF é fixada ao período ATIVO — passa
+    a contar na cota dele mesmo que a data de emissão seja de outro período
+    (ex.: NF de mês anterior incluída numa cota renovada por liminar)."""
     nome = (arquivo.filename or "").lower()
     if not nome.endswith(".xml"):
         return RedirectResponse(
@@ -700,8 +702,13 @@ async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_
     if len(conteudo) > 5 * 1024 * 1024:  # 5MB
         return RedirectResponse(
             "/dashboard?upload_erro=Arquivo+muito+grande+%28max+5MB%29", status_code=303)
+    fixar_id = None
+    if fixar_periodo:
+        p_ativo = periodo_svc.get_periodo_ativo(db)
+        if p_ativo is not None:
+            fixar_id = p_ativo.id
     try:
-        r = importar_xml_manual(db, conteudo)
+        r = importar_xml_manual(db, conteudo, fixar_periodo_id=fixar_id)
     except UploadInvalido as e:
         msg = str(e).replace(" ", "+")
         return RedirectResponse(f"/dashboard?upload_erro={msg}", status_code=303)
@@ -710,7 +717,25 @@ async def upload_xml(arquivo: UploadFile = File(...), db: Session = Depends(get_
         return RedirectResponse(
             "/dashboard?upload_erro=Erro+ao+processar+XML", status_code=303)
     msg = (f"NF+{r['acao']}+%28{r['litros']:.0f}+L%29"
-           + ("+marcada+como+fora+da+cota" if r["excluida_cota"] else "+incluida+na+cota"))
+           + ("+marcada+como+fora+da+cota" if r["excluida_cota"] else "+incluida+na+cota")
+           + ("+e+FIXADA+neste+periodo" if r["fixada"] else ""))
     _reavaliar_alertas(db)
     return RedirectResponse(f"/dashboard?upload_ok={msg}", status_code=303)
+
+
+@app.post("/notas/{nota_id}/fixar-periodo", dependencies=[Depends(require_login)])
+def fixar_periodo_nota(nota_id: int, db: Session = Depends(get_db)):
+    """Alterna a fixação de uma NF ao período ATIVO.
+
+    - NF ainda não fixada → fixa ao período ativo (passa a contar na cota
+      dele independente da data).
+    - NF já fixada ao período ativo → solta (volta a valer pela data).
+    Idempotente e reversível."""
+    nf = db.get(NotaFiscal, nota_id)
+    p = periodo_svc.get_periodo_ativo(db)
+    if nf is not None and p is not None:
+        nf.periodo_id = None if nf.periodo_id == p.id else p.id
+        db.commit()
+        _reavaliar_alertas(db)
+    return RedirectResponse("/dashboard", status_code=303)
 

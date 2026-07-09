@@ -66,7 +66,8 @@
     <div class="upload-box">
       {% if upload_ok %}<div class="sync-msg ok inline">{{ upload_ok }}</div>{% endif %}
       {% if upload_erro %}<div class="sync-msg crit inline">{{ upload_erro }}</div>{% endif %}
-      <form method="post" action="/notas/upload" enctype="multipart/form-data" class="upload-form">
+      <form method="post" action="/notas/upload" enctype="multipart/form-data" class="upload-form"
+            onsubmit="if(this.fixar_periodo.checked){return confirm('Fixar esta NF no período ATIVO ({{ periodo.nome or '—' }})?\n\nA NF vai contar na cota deste período MESMO se a data de emissão for de outro período.\n\nUse para incluir notas de período anterior numa cota renovada (ex.: liminar).');}return true;">
         <label class="upload-label">
           <strong>Upload manual de NFe</strong>
           <span class="muted">Caso a SEFAZ não tenha trazido alguma nota — envie o XML aqui.
@@ -74,6 +75,10 @@
             como "na cota" ou "fora da cota". Você pode ajustar depois pelo botão.</span>
         </label>
         <input type="file" name="arquivo" accept=".xml" required>
+        <label class="upload-check">
+          <input type="checkbox" name="fixar_periodo" value="1">
+          Fixar no período ativo (mesmo se a data for de outro período)
+        </label>
         <button type="submit">Enviar XML</button>
       </form>
     </div>
@@ -100,6 +105,7 @@
               {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
               {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
               {% else %}<span class="tag tag-ok">na cota</span>{% endif %}
+              {% if n.periodo_id %}<br><span class="tag tag-fixada" title="NF fixada manualmente a este período">📌 fixada</span>{% endif %}
             </td>
             <td class="acoes">
               {% if not n.cancelada %}
@@ -109,6 +115,12 @@
                     {% if n.excluida_cota %}↩ incluir na cota{% else %}✕ excluir da cota{% endif %}
                   </button>
                 </form>
+                {% if n.periodo_id == periodo.id %}
+                <form method="post" action="/notas/{{ n.id }}/fixar-periodo" style="display:inline"
+                      onsubmit="return confirm('Soltar esta NF do período atual?\n\nEla voltará a contar pela data de emissão ({{ n.data_emissao|data_curta }}), saindo da cota deste período.');">
+                  <button type="submit" class="btn-mini" title="Soltar do período">📌 soltar do período</button>
+                </form>
+                {% endif %}
               {% endif %}
               {% if is_admin %}
               <form method="post" action="/notas/{{ n.id }}/excluir" style="display:inline"
