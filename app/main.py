@@ -329,10 +329,15 @@ def _config_redirect(request: Request, *, msg: str | None = None,
 @app.get("/configuracao", response_class=HTMLResponse,
          dependencies=[Depends(require_admin)])
 def config_get(request: Request, db: Session = Depends(get_db)):
+    editar_id = request.query_params.get("editar_periodo", "")
+    periodo_editar = None
+    if editar_id.isdigit():
+        periodo_editar = periodo_svc.get_periodo(db, int(editar_id))
     return render(
         "configuracao.html", request, db,
         periodo_ativo=periodo_svc.get_periodo_ativo(db),
         periodos=periodo_svc.listar(db),
+        periodo_editar=periodo_editar,
         usuarios=db.query(Usuario).order_by(Usuario.email).all(),
         emails_alerta=db.query(EmailAlerta).order_by(EmailAlerta.email).all(),
         params=runtime_config.snapshot_safe(db),
@@ -365,6 +370,35 @@ def config_novo(
 def config_ativar(periodo_id: int, request: Request, db: Session = Depends(get_db)):
     periodo_svc.ativar(db, periodo_id)
     return _config_redirect(request, msg="Periodo ativado")
+
+
+@app.post("/configuracao/periodos/{periodo_id}/editar",
+          dependencies=[Depends(require_admin)])
+def config_periodo_editar(
+    periodo_id: int,
+    request: Request,
+    nome: str = Form(""),
+    inicio: str = Form(...),
+    fim: str = Form(...),
+    cota_litros: float = Form(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        ini = date.fromisoformat(inicio)
+        fim_d = date.fromisoformat(fim)
+    except ValueError:
+        return _config_redirect(request, erro="Datas invalidas")
+    if fim_d < ini:
+        return _config_redirect(request, erro="Data fim anterior ao inicio")
+    p = periodo_svc.editar(
+        db, periodo_id,
+        nome=nome or "Período",
+        inicio=ini, fim=fim_d,
+        cota_litros=Decimal(str(cota_litros)),
+    )
+    if p is None:
+        return _config_redirect(request, erro="Periodo nao encontrado")
+    return _config_redirect(request, msg="Periodo atualizado")
 
 
 @app.post("/configuracao/periodos/{periodo_id}/excluir",

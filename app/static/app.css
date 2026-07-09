@@ -299,6 +299,9 @@ td.acoes form:last-child { margin-right: 0; }
               letter-spacing: 0.04em; }
 .grid button { grid-column: span 2; justify-self: start; }
 .grid-form { max-width: 720px; }
+.form-editar { border-left: 4px solid var(--accent); }
+.form-editar-acoes { grid-column: span 2; display: flex; align-items: center; gap: 1rem; }
+.form-editar-acoes button { grid-column: auto; }
 
 /* Identificação do usuário logado no topbar */
 .topbar nav .user-info {

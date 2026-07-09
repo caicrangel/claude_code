@@ -37,6 +37,27 @@
       <button type="submit">Criar e ativar</button>
     </form>
 
+    {% if periodo_editar %}
+    <h2>Editar período</h2>
+    <p class="muted">Ajusta as datas, a cota ou o nome deste período — sem criar
+       um novo. Útil para corrigir o fim de um período quando uma cota nova
+       passa a valer no meio do caminho (ex.: liminar).</p>
+    <form method="post" action="/configuracao/periodos/{{ periodo_editar.id }}/editar?aba=periodos"
+          class="grid grid-form form-editar">
+      <label>Nome <input name="nome" value="{{ periodo_editar.nome or '' }}"></label>
+      <label>Cota (L) <input name="cota_litros" type="number" step="0.001"
+             value="{{ periodo_editar.cota_litros }}" required></label>
+      <label>Início <input name="inicio" type="date"
+             value="{{ periodo_editar.inicio.isoformat() }}" required></label>
+      <label>Fim <input name="fim" type="date"
+             value="{{ periodo_editar.fim.isoformat() }}" required></label>
+      <div class="form-editar-acoes">
+        <button type="submit">Salvar alterações</button>
+        <a class="btn-mini" href="/configuracao?aba=periodos">cancelar</a>
+      </div>
+    </form>
+    {% endif %}
+
     <h2>Histórico de períodos</h2>
     <table>
       <thead><tr><th>Nome</th><th>Início</th><th>Fim</th><th class="num">Cota</th><th>Status</th><th></th></tr></thead>
@@ -50,6 +71,7 @@
             <td>{% if p.ativo %}<span class="tag tag-ok">ativo</span>{% else %}<span class="tag tag-warn">arquivado</span>{% endif %}</td>
             <td>
               <a class="btn-mini" href="/relatorios?periodo_id={{ p.id }}">ver relatório</a>
+              <a class="btn-mini" href="/configuracao?aba=periodos&editar_periodo={{ p.id }}">editar</a>
               {% if not p.ativo %}
                 <form method="post" action="/configuracao/ativar/{{ p.id }}?aba=periodos" style="display:inline">
                   <button type="submit" class="btn-mini">reativar</button>

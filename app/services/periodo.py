@@ -47,6 +47,22 @@ def ativar(db: Session, periodo_id: int) -> CotaPeriodo | None:
     return p
 
 
+def editar(db: Session, periodo_id: int, *, nome: str, inicio: date, fim: date,
+           cota_litros: Decimal) -> CotaPeriodo | None:
+    """Edita nome, datas e cota de um período existente (ativo ou arquivado).
+    Não mexe no status de ativação. Retorna o período ou None se não existe."""
+    p = get_periodo(db, periodo_id)
+    if p is None:
+        return None
+    p.nome = nome
+    p.inicio = inicio
+    p.fim = fim
+    p.cota_litros = cota_litros
+    db.commit()
+    db.refresh(p)
+    return p
+
+
 class PeriodoAtivoError(RuntimeError):
     """Levantada ao tentar excluir o período ativo."""
 
