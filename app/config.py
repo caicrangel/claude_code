@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "alertas@empresa.com.br"
     SMTP_TLS: bool = True
 
+    # Telegram (alertas via bot)
+    TELEGRAM_ENABLED: bool = False
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+
     ALERT_THRESHOLDS: str = "70,85,95,100"
 
     @property

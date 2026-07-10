@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .. import runtime_config
 from ..format import fmt_data_curta, fmt_litros, fmt_pct
 from ..models import Alerta, CotaPeriodo, EmailAlerta, NotaFiscal, NotaPeriodo
+from . import telegram
 from .email import send_email
 from .logo_email import bloco_html as bloco_logo
 from .logo_email import logo_para_email
@@ -243,10 +244,22 @@ def avaliar_e_alertar(db: Session) -> dict:
             ok_any = ok_any or ok
         if not destinatarios:
             log.warning("Sem destinatários ativos em email_alertas — alerta %d%% não enviado", thr)
+        # Telegram (complementar ao e-mail; respeita a mesma dedup por threshold)
+        emp = escape(nome_empresa)
+        tg_text = (
+            f"🚨 <b>Cota Diesel — {emp}</b>\n"
+            f"Limite atingido: <b>{thr}%</b> da cota\n"
+            f"Consumido: <b>{escape(fmt_litros(consumo))}</b> ({escape(fmt_pct(pct))})\n"
+            f"Restante: {escape(fmt_litros(restante))} de {escape(fmt_litros(cota))}\n"
+            f"Período: {escape(fmt_data_curta(p.inicio))} a {escape(fmt_data_curta(p.fim))}"
+        )
+        tg_ok = telegram.send_message(tg_text, db=db)
+        canal = "email+telegram" if (ok_any and tg_ok) else (
+            "telegram" if tg_ok else ("email" if ok_any else "log"))
         db.add(Alerta(
             threshold_pct=thr,
             litros_consumidos=consumo,
-            canal="email" if ok_any else "log",
+            canal=canal,
             mensagem=msg_text,
             periodo_inicio_iso=periodo_iso,
         ))

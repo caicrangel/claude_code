@@ -583,6 +583,33 @@ def smtp_salvar(
     return _config_redirect(request, msg="SMTP atualizado")
 
 
+# ---- Telegram ----
+
+@app.post("/configuracao/telegram", dependencies=[Depends(require_admin)])
+def telegram_salvar(
+    request: Request,
+    TELEGRAM_ENABLED: str = Form(""),
+    TELEGRAM_BOT_TOKEN: str = Form(""),
+    TELEGRAM_CHAT_ID: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    runtime_config.set_(db, "TELEGRAM_ENABLED", "true" if TELEGRAM_ENABLED else "false")
+    runtime_config.set_(db, "TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID.strip())
+    # Token: só atualiza se digitado (em branco mantém o atual).
+    if TELEGRAM_BOT_TOKEN.strip():
+        runtime_config.set_(db, "TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN.strip())
+    return _config_redirect(request, msg="Telegram atualizado")
+
+
+@app.post("/configuracao/telegram/testar", dependencies=[Depends(require_admin)])
+def telegram_testar(request: Request, db: Session = Depends(get_db)):
+    from .services import telegram as tg
+    ok, detalhe = tg.enviar_teste(db)
+    if ok:
+        return _config_redirect(request, msg="Telegram: " + detalhe)
+    return _config_redirect(request, erro="Telegram: " + detalhe)
+
+
 # ---- SEFAZ ----
 
 @app.post("/configuracao/sefaz", dependencies=[Depends(require_admin)])

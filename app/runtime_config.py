@@ -53,10 +53,14 @@ EDITAVEIS: dict[str, str] = {
     # SEFAZ
     "SEFAZ_AMBIENTE":     "SEFAZ_AMBIENTE",
     "SEFAZ_UF":           "SEFAZ_UF",
+    # Telegram
+    "TELEGRAM_ENABLED":   "TELEGRAM_ENABLED",
+    "TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID":   "TELEGRAM_CHAT_ID",
 }
 
 # Conjunto das chaves cujo valor deve ser cifrado no banco.
-SENSIVEIS: set[str] = {"SMTP_PASSWORD"}
+SENSIVEIS: set[str] = {"SMTP_PASSWORD", "TELEGRAM_BOT_TOKEN"}
 
 
 def _default(chave: str) -> str:
@@ -178,6 +182,17 @@ def get_smtp(db: Session) -> dict:
         "password": get(db, "SMTP_PASSWORD"),
         "from":     get(db, "SMTP_FROM") or settings.SMTP_FROM,
         "tls":      _bool(get(db, "SMTP_TLS"), True),
+    }
+
+
+def get_telegram(db: Session) -> dict:
+    """Configuração Telegram efetiva (banco com fallback .env)."""
+    raw_en = get(db, "TELEGRAM_ENABLED")
+    enabled = str(raw_en).strip().lower() in ("1", "true", "yes", "sim", "on")
+    return {
+        "enabled": enabled,
+        "token": (get(db, "TELEGRAM_BOT_TOKEN") or "").strip(),
+        "chat_id": (get(db, "TELEGRAM_CHAT_ID") or "").strip(),
     }
 
 

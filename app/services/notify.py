@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from .. import runtime_config
 from ..format import fmt_data, fmt_data_curta, fmt_litros, fmt_moeda, fmt_pct
 from ..models import EmailAlerta, NotaFiscal, get_state, set_state
+from . import telegram
 from .email import send_email
 from .logo_email import bloco_html as bloco_logo
 from .logo_email import logo_para_email
@@ -178,14 +179,31 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict) -
     """Envia 1 e-mail com todas as NFs novas do ciclo. Retorna nº de envios OK."""
     if not nfs:
         return 0
-    destinatarios = _destinatarios_ativos(db)
-    if not destinatarios:
-        log.warning("Sem destinatários ativos em email_alertas — %d NF(s) novas não notificadas", len(nfs))
-        return 0
     empresa = runtime_config.empresa_nome(db)
     cnpj = runtime_config.cnpj_limpo(db)
     pct = float(resumo_cota.get("pct") or 0)
-    subject = (f"[Cota Diesel] {empresa} — {len(nfs)} nova{'s' if len(nfs) > 1 else ''} "
+    total_litros = sum((Decimal(nf.litros_diesel or 0) for nf in nfs), Decimal(0))
+
+    # Telegram (independente de haver destinatários de e-mail)
+    plural = "s" if len(nfs) > 1 else ""
+    tg_linhas = "\n".join(
+        f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
+        f"NF {escape(nf.numero or '—')} — {escape(fmt_litros(nf.litros_diesel or 0))}"
+        for nf in nfs[:15]
+    )
+    tg_text = (
+        f"🆕 <b>{escape(empresa)}</b>\n"
+        f"{len(nfs)} nova{plural} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
+        f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
+        + ("\n…" if len(nfs) > 15 else "")
+    )
+    telegram.send_message(tg_text, db=db)
+
+    destinatarios = _destinatarios_ativos(db)
+    if not destinatarios:
+        log.info("NFs novas: %d — sem destinatários de e-mail (Telegram já notificado)", len(nfs))
+        return 0
+    subject = (f"[Cota Diesel] {empresa} — {len(nfs)} nova{plural} "
                f"NF · {fmt_pct(pct)} da cota")
     logo_src, logo_img = logo_para_email(db)
     text = _texto_nfs_novas(empresa, cnpj, nfs, resumo_cota)
@@ -239,7 +257,8 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
     fim_efetivo = min(fim, p.fim)
 
     destinatarios = _destinatarios_ativos(db)
-    if not destinatarios:
+    tg_cfg = telegram._resolver_cfg(db)  # None se Telegram off/incompleto
+    if not destinatarios and tg_cfg is None:
         return {"enviado": False, "motivo": "sem-destinatarios"}
 
     # KPIs do mês de referência (fatia mensal, ciente de fixação de período)
@@ -296,13 +315,31 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
                       attachments=anexos or None, inline_images=inline, db=db):
             enviados += 1
 
-    if enviados:
+    # Telegram: resumo + PDF (se houver)
+    tg_text = (
+        f"📊 <b>{escape(empresa)} — Panorama de {escape(mes_label)}</b>\n"
+        f"Consumido no mês: <b>{escape(fmt_litros(consumo_mes))}</b> "
+        f"({escape(fmt_moeda(valor_mes))})\n"
+        f"Preço médio: {escape(fmt_moeda(preco_medio_mes))}/L\n"
+        f"Acumulado: <b>{escape(fmt_pct(pct_acum))}</b> "
+        f"({escape(fmt_litros(consumo_acum))})\n"
+        f"Restante: {escape(fmt_litros(restante))} de {escape(fmt_litros(cota))}"
+    )
+    tg_ok = False
+    if tg_cfg is not None:
+        tg_ok = telegram.send_message(tg_text, db=db)
+        if pdf_bytes:
+            telegram.send_document(f"panorama-{inicio.strftime('%Y-%m')}.pdf",
+                                   pdf_bytes, caption=f"Panorama {mes_label}", db=db)
+
+    if enviados or tg_ok:
         set_state(db, chave_dedup, datetime.utcnow().isoformat())
 
-    log.info("Panorama mensal %s: %d/%d destinatários OK",
-             mes_label, enviados, len(destinatarios))
-    return {"enviado": enviados > 0, "mes": inicio.isoformat(),
-            "destinatarios": len(destinatarios), "enviados_ok": enviados}
+    log.info("Panorama mensal %s: e-mail %d/%d, telegram=%s",
+             mes_label, enviados, len(destinatarios), tg_ok)
+    return {"enviado": (enviados > 0 or tg_ok), "mes": inicio.isoformat(),
+            "destinatarios": len(destinatarios), "enviados_ok": enviados,
+            "telegram": tg_ok}
 
 
 def _html_panorama(empresa: str, cnpj: str, periodo, ini_mes: date, fim_mes: date,

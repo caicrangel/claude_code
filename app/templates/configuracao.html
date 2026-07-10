@@ -187,6 +187,35 @@
       </label>
       <button type="submit">Salvar SMTP</button>
     </form>
+
+    <h2>Telegram (alertas via bot)</h2>
+    <p class="muted">Recebe os mesmos alertas (NF nova, limiares da cota e panorama
+       mensal) em um chat/grupo do Telegram. Crie um bot no <code>@BotFather</code>,
+       pegue o <strong>token</strong> e o <strong>chat ID</strong> do destino.
+       Deixe o <strong>token em branco para manter o atual</strong>.</p>
+    <form method="post" action="/configuracao/telegram?aba=parametros" class="grid grid-form">
+      <label>Ativado
+        <select name="TELEGRAM_ENABLED">
+          {% set tg_on = params.TELEGRAM_ENABLED in ('true','True','1','on','yes','sim') %}
+          <option value="on" {% if tg_on %}selected{% endif %}>Sim</option>
+          <option value="" {% if not tg_on %}selected{% endif %}>Não</option>
+        </select>
+      </label>
+      <label>Chat ID
+        <input name="TELEGRAM_CHAT_ID" value="{{ params.TELEGRAM_CHAT_ID }}"
+               placeholder="ex: 123456789 ou -1001234567890 (grupo)">
+      </label>
+      <label style="grid-column: span 2;">Bot token
+        <input name="TELEGRAM_BOT_TOKEN" type="password" autocomplete="new-password"
+               placeholder="{% if params.TELEGRAM_BOT_TOKEN %}(token gravado — em branco para manter){% else %}123456:ABC-DEF...{% endif %}">
+      </label>
+      <div class="form-editar-acoes">
+        <button type="submit">Salvar Telegram</button>
+      </div>
+    </form>
+    <form method="post" action="/configuracao/telegram/testar?aba=parametros" style="margin-top:0.6rem;">
+      <button type="submit" class="btn-mini">Enviar mensagem de teste</button>
+    </form>
   </section>
 
   <!-- Aba: E-mails -->
