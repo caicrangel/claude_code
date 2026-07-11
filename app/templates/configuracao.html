@@ -242,6 +242,44 @@
         </button>
       </div>
     </form>
+
+    <h3 style="margin:1.4rem 0 0.4rem;">Reenviar alerta de NF(s) específicas</h3>
+    <p class="muted">Selecione as notas do período ativo e reenvie o alerta de "nova NF"
+       (útil se o alerta original saiu com dado errado).</p>
+    <form method="post" action="/configuracao/disparar-nfs?aba=parametros">
+      <div class="nf-select-toolbar">
+        <label class="upload-check" style="text-transform:none;">
+          <input type="checkbox" name="canal_email" value="1" checked> E-mail
+        </label>
+        <label class="upload-check" style="text-transform:none;">
+          <input type="checkbox" name="canal_telegram" value="1" checked> Telegram
+        </label>
+        <a href="#" class="btn-mini" onclick="document.querySelectorAll('.nf-check').forEach(c=>c.checked=true);return false;">marcar todas</a>
+        <a href="#" class="btn-mini" onclick="document.querySelectorAll('.nf-check').forEach(c=>c.checked=false);return false;">desmarcar</a>
+      </div>
+      <div class="nf-select-list">
+        {% for n in notas_periodo %}
+          <label class="nf-select-item">
+            <input type="checkbox" class="nf-check" name="nota_ids" value="{{ n.id }}">
+            <span class="nf-select-meta">
+              <strong>{{ n.data_emissao|data_curta }}</strong>
+              · NF {{ n.numero or '—' }}
+              · {{ (n.emitente_nome or '—')[:32] }}
+              · {{ n.litros_diesel|numero }} L
+              {% if n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>{% endif %}
+            </span>
+          </label>
+        {% else %}
+          <div class="muted" style="padding:0.5rem;">Nenhuma NF no período ativo.</div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:0.6rem;">
+        <button type="submit"
+                onclick="return confirm('Reenviar o alerta das NFs selecionadas para os canais marcados?');">
+          Reenviar alerta das NFs marcadas
+        </button>
+      </div>
+    </form>
   </section>
 
   <!-- Aba: E-mails -->

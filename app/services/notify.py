@@ -175,33 +175,34 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
     )
 
 
-def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict) -> int:
-    """Envia 1 e-mail com todas as NFs novas do ciclo. Retorna nº de envios OK."""
+def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
+                        *, via_email: bool = True, via_telegram: bool = True) -> int:
+    """Envia 1 e-mail/telegram com as NFs informadas. Retorna nº de e-mails OK.
+    `via_email`/`via_telegram` escolhem os canais (usado no disparo manual)."""
     if not nfs:
         return 0
     empresa = runtime_config.empresa_nome(db)
     cnpj = runtime_config.cnpj_limpo(db)
     pct = float(resumo_cota.get("pct") or 0)
     total_litros = sum((Decimal(nf.litros_diesel or 0) for nf in nfs), Decimal(0))
-
-    # Telegram (independente de haver destinatários de e-mail)
     plural = "s" if len(nfs) > 1 else ""
-    tg_linhas = "\n".join(
-        f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
-        f"NF {escape(nf.numero or '—')} — {escape(fmt_litros(nf.litros_diesel or 0))}"
-        for nf in nfs[:15]
-    )
-    tg_text = (
-        f"🆕 <b>{escape(empresa)}</b>\n"
-        f"{len(nfs)} nova{plural} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
-        f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
-        + ("\n…" if len(nfs) > 15 else "")
-    )
-    telegram.send_message(tg_text, db=db)
 
-    destinatarios = _destinatarios_ativos(db)
+    if via_telegram:
+        tg_linhas = "\n".join(
+            f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
+            f"NF {escape(nf.numero or '—')} — {escape(fmt_litros(nf.litros_diesel or 0))}"
+            for nf in nfs[:15]
+        )
+        tg_text = (
+            f"🆕 <b>{escape(empresa)}</b>\n"
+            f"{len(nfs)} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
+            f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
+            + ("\n…" if len(nfs) > 15 else "")
+        )
+        telegram.send_message(tg_text, db=db)
+
+    destinatarios = _destinatarios_ativos(db) if via_email else []
     if not destinatarios:
-        log.info("NFs novas: %d — sem destinatários de e-mail (Telegram já notificado)", len(nfs))
         return 0
     subject = (f"[Cota Diesel] {empresa} — {len(nfs)} nova{plural} "
                f"NF · {fmt_pct(pct)} da cota")

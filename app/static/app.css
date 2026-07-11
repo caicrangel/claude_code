@@ -303,6 +303,24 @@ td.acoes form:last-child { margin-right: 0; }
 .form-editar-acoes { grid-column: span 2; display: flex; align-items: center; gap: 1rem; }
 .form-editar-acoes button { grid-column: auto; }
 
+/* Central de disparos — seleção de NFs */
+.nf-select-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.nf-select-list {
+  max-height: 260px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel);
+}
+.nf-select-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border);
+  font-size: 0.85rem; cursor: pointer;
+}
+.nf-select-item:last-child { border-bottom: 0; }
+.nf-select-item:hover { background: var(--panel-soft); }
+.nf-select-item input { width: auto; }
+.nf-select-meta { color: var(--text); }
+.nf-select-meta strong { font-variant-numeric: tabular-nums; }
+
 /* Identificação do usuário logado no topbar */
 .topbar nav .user-info {
   font-size: 0.85rem; padding: 0.2rem 0.5rem;

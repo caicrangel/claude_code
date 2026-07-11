@@ -335,11 +335,22 @@ def config_get(request: Request, db: Session = Depends(get_db)):
     periodo_editar = None
     if editar_id.isdigit():
         periodo_editar = periodo_svc.get_periodo(db, int(editar_id))
+    p_ativo = periodo_svc.get_periodo_ativo(db)
+    notas_periodo = []
+    if p_ativo is not None:
+        notas_periodo = (
+            db.query(NotaFiscal)
+            .filter(cond_pertence_periodo(p_ativo),
+                    NotaFiscal.cancelada.is_(False))
+            .order_by(NotaFiscal.data_emissao.desc().nullslast())
+            .limit(200).all()
+        )
     return render(
         "configuracao.html", request, db,
-        periodo_ativo=periodo_svc.get_periodo_ativo(db),
+        periodo_ativo=p_ativo,
         periodos=periodo_svc.listar(db),
         periodo_editar=periodo_editar,
+        notas_periodo=notas_periodo,
         usuarios=db.query(Usuario).order_by(Usuario.email).all(),
         emails_alerta=db.query(EmailAlerta).order_by(EmailAlerta.email).all(),
         params=runtime_config.snapshot_safe(db),
@@ -651,6 +662,36 @@ def config_disparar(
             request, erro="Panorama nao enviado: " + str(r.get("motivo", "")))
 
     return _config_redirect(request, erro="Tipo de disparo invalido")
+
+
+@app.post("/configuracao/disparar-nfs", dependencies=[Depends(require_admin)])
+def config_disparar_nfs(
+    request: Request,
+    nota_ids: list[int] = Form(default=[]),
+    canal_email: str = Form(""),
+    canal_telegram: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    from .services.notify import notificar_nfs_novas
+    via_email = bool(canal_email)
+    via_tg = bool(canal_telegram)
+    if not via_email and not via_tg:
+        return _config_redirect(request, erro="Escolha ao menos um canal")
+    if not nota_ids:
+        return _config_redirect(request, erro="Selecione ao menos uma NF")
+    p = periodo_svc.get_periodo_ativo(db)
+    if p is None:
+        return _config_redirect(request, erro="Sem periodo ativo")
+    nfs = db.query(NotaFiscal).filter(NotaFiscal.id.in_(nota_ids)).all()
+    if not nfs:
+        return _config_redirect(request, erro="NFs nao encontradas")
+    consumo = litros_consumidos(db, periodo=p)
+    cota = Decimal(p.cota_litros or 0)
+    pct = percentual(consumo, cota)
+    resumo = {"consumo": float(consumo), "cota": float(cota),
+              "pct": pct, "restante": float(cota - consumo)}
+    n = notificar_nfs_novas(db, nfs, resumo, via_email=via_email, via_telegram=via_tg)
+    return _config_redirect(request, msg=f"Alerta de {len(nfs)} NF(s) enviado (email={n})")
 
 
 # ---- SEFAZ ----
