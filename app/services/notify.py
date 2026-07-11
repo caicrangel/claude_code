@@ -190,7 +190,8 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     if via_telegram:
         tg_linhas = "\n".join(
             f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
-            f"NF {escape(nf.numero or '—')} — {escape(fmt_litros(nf.litros_diesel or 0))}"
+            f"NF {escape(nf.numero or '—')} — <b>{escape((nf.emitente_nome or '—')[:40])}</b> "
+            f"— {escape(fmt_litros(nf.litros_diesel or 0))}"
             for nf in nfs[:15]
         )
         tg_text = (
