@@ -20,6 +20,11 @@ NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 # que também caem em 271019 mas não são combustível).
 NCM_DIESEL_PREFIXES = ("271019",)
 
+# Unidades de volume (litros) aceitas para contabilizar a galonagem. Emitentes
+# usam variações: LT, LTS, L, LTR, LITRO, LITROS, LT. etc. Comparação após
+# upper() + strip() + remoção de ponto final.
+UNIDADES_LITRO = {"LT", "LTS", "L", "LTR", "LTRS", "LITRO", "LITROS", "LITRO(S)"}
+
 
 @dataclass
 class ItemDiesel:
@@ -50,8 +55,8 @@ class NFeParsed:
         # Ignora itens em kg, m³, etc — precisam ser litros explícitos.
         total = Decimal("0")
         for it in self.itens_diesel:
-            unit = it.unidade.upper().strip()
-            if unit in ("LT", "L", "LITRO", "LITROS"):
+            unit = it.unidade.upper().strip().rstrip(".").strip()
+            if unit in UNIDADES_LITRO:
                 total += it.quantidade
         return total
 
