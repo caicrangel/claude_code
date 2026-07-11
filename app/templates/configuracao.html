@@ -216,6 +216,32 @@
     <form method="post" action="/configuracao/telegram/testar?aba=parametros" style="margin-top:0.6rem;">
       <button type="submit" class="btn-mini">Enviar mensagem de teste</button>
     </form>
+
+    <h2>Central de disparos (envio manual)</h2>
+    <p class="muted">Dispara um alerta agora, com os dados atuais. Útil para reenviar
+       informações depois de uma correção. Escolha o que enviar e por quais canais.</p>
+    <form method="post" action="/configuracao/disparar?aba=parametros" class="grid grid-form">
+      <label>O que enviar
+        <select name="tipo">
+          <option value="situacao">Situação atual da cota (consumo, %, restante)</option>
+          <option value="panorama">Panorama do mês atual (parcial, com PDF)</option>
+        </select>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:0.4rem;justify-content:flex-end;">
+        <label class="upload-check" style="text-transform:none;">
+          <input type="checkbox" name="canal_email" value="1" checked> E-mail
+        </label>
+        <label class="upload-check" style="text-transform:none;">
+          <input type="checkbox" name="canal_telegram" value="1" checked> Telegram
+        </label>
+      </div>
+      <div class="form-editar-acoes">
+        <button type="submit"
+                onclick="return confirm('Disparar o alerta selecionado agora para os canais marcados?');">
+          Disparar agora
+        </button>
+      </div>
+    </form>
   </section>
 
   <!-- Aba: E-mails -->

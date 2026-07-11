@@ -219,6 +219,104 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict) -
     return enviados
 
 
+# ---------- disparo manual: situação atual da cota ----------
+
+def _html_situacao(empresa: str, cnpj: str, periodo, consumo: Decimal,
+                   cota: Decimal, pct: float, restante: Decimal,
+                   logo_html: str = "") -> str:
+    cor_uso = "#dc2626" if pct >= 95 else ("#d97706" if pct >= 70 else "#16a34a")
+    pct_fill = min(pct, 100.0)
+    return f"""\
+<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f1f5f9;
+             font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+             color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="max-width:600px;margin:0 auto;background:#ffffff;
+                border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+    <tr><td style="background:#0284c7;color:#ffffff;padding:18px 24px;
+                   font-size:18px;font-weight:700;">Situação atual da cota</td></tr>
+    <tr><td style="padding:24px;">
+      {logo_html}
+      <div style="font-size:16px;font-weight:600;">{escape(empresa)}</div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:20px;">CNPJ {escape(cnpj)}</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:8px 0;color:#64748b;width:55%;">Período de apuração</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;">
+            {fmt_data_curta(periodo.inicio)} a {fmt_data_curta(periodo.fim)}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Cota total</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;
+                     border-top:1px solid #e2e8f0;">{fmt_litros(cota)}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Consumido</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;
+                     border-top:1px solid #e2e8f0;color:{cor_uso};">
+            {fmt_litros(consumo)} ({fmt_pct(pct)})</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Restante</td>
+          <td style="padding:8px 0;font-weight:600;text-align:right;
+                     border-top:1px solid #e2e8f0;">{fmt_litros(restante)}</td></tr>
+      </table>
+      <div style="margin-top:20px;">
+        <div style="font-size:12px;color:#64748b;margin-bottom:6px;">Uso da cota</div>
+        <div style="background:#e2e8f0;border-radius:6px;height:14px;overflow:hidden;">
+          <div style="background:{cor_uso};width:{pct_fill:.1f}%;height:100%;"></div></div>
+      </div>
+    </td></tr>
+    <tr><td style="background:#f8fafc;padding:14px 24px;font-size:11px;
+                   color:#94a3b8;border-top:1px solid #e2e8f0;">
+      Disparo manual do sistema de cota — não responder.</td></tr>
+  </table>
+</body></html>"""
+
+
+def enviar_situacao_cota(db: Session, *, via_email: bool = True,
+                         via_telegram: bool = True) -> dict:
+    """Disparo manual: envia um snapshot da cota atual (consumo, %, restante)
+    pelos canais escolhidos. Não passa por dedup — é acionado sob demanda."""
+    p = get_periodo_ativo(db)
+    if p is None:
+        return {"ok": False, "motivo": "sem-periodo-ativo"}
+    consumo = litros_consumidos(db, periodo=p)
+    cota = Decimal(p.cota_litros or 0)
+    pct = percentual(consumo, cota)
+    restante = cota - consumo
+    empresa = runtime_config.empresa_nome(db)
+    cnpj = runtime_config.cnpj_limpo(db)
+
+    email_ok = 0
+    if via_email:
+        destinatarios = _destinatarios_ativos(db)
+        logo_src, logo_img = logo_para_email(db)
+        text = (f"{empresa} (CNPJ {cnpj})\n\nSituação atual da cota\n"
+                f"Período: {fmt_data_curta(p.inicio)} a {fmt_data_curta(p.fim)}\n"
+                f"Cota: {fmt_litros(cota)}\n"
+                f"Consumido: {fmt_litros(consumo)} ({fmt_pct(pct)})\n"
+                f"Restante: {fmt_litros(restante)}")
+        html = _html_situacao(empresa, cnpj, p, consumo, cota, pct, restante,
+                              bloco_logo(logo_src))
+        inline = [logo_img] if logo_img else None
+        for dest in destinatarios:
+            if send_email(to=dest, subject=f"[Cota Diesel] Situação atual — {empresa}",
+                          body=text, html_body=html, inline_images=inline, db=db):
+                email_ok += 1
+
+    tg_ok = False
+    if via_telegram:
+        cor = "🔴" if pct >= 95 else ("🟠" if pct >= 70 else "🟢")
+        tg_text = (
+            f"{cor} <b>{escape(empresa)} — Situação da cota</b>\n"
+            f"Consumido: <b>{escape(fmt_litros(consumo))}</b> ({escape(fmt_pct(pct))})\n"
+            f"Restante: {escape(fmt_litros(restante))} de {escape(fmt_litros(cota))}\n"
+            f"Período: {escape(fmt_data_curta(p.inicio))} a {escape(fmt_data_curta(p.fim))}"
+        )
+        tg_ok = telegram.send_message(tg_text, db=db)
+
+    log.info("Situação da cota (manual): email=%d telegram=%s", email_ok, tg_ok)
+    return {"ok": (email_ok > 0 or tg_ok), "email_ok": email_ok, "telegram": tg_ok,
+            "pct": pct}
+
+
 # ---------- panorama mensal ----------
 
 def _mes_anterior(hoje: date) -> tuple[date, date, str]:
@@ -233,12 +331,13 @@ def _mes_anterior(hoje: date) -> tuple[date, date, str]:
 
 
 def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
-                            forcar: bool = False) -> dict:
+                            forcar: bool = False, via_email: bool = True,
+                            via_telegram: bool = True) -> dict:
     """Envia panorama do mês ANTERIOR (relatório de fechamento).
 
     Programado para rodar dia 1 do mês às 08h. Dedup via tabela `state`:
     se já enviou esse mês, retorna sem reenviar (a não ser que forcar=True).
-    """
+    `via_email`/`via_telegram` permitem escolher os canais (disparo manual)."""
     hoje = hoje or date.today()
     inicio, fim, chave_dedup = _mes_anterior(hoje)
 
@@ -256,8 +355,8 @@ def enviar_panorama_mensal(db: Session, *, hoje: date | None = None,
     ini_efetivo = max(inicio, p.inicio)
     fim_efetivo = min(fim, p.fim)
 
-    destinatarios = _destinatarios_ativos(db)
-    tg_cfg = telegram._resolver_cfg(db)  # None se Telegram off/incompleto
+    destinatarios = _destinatarios_ativos(db) if via_email else []
+    tg_cfg = telegram._resolver_cfg(db) if via_telegram else None
     if not destinatarios and tg_cfg is None:
         return {"enviado": False, "motivo": "sem-destinatarios"}
 

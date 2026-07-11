@@ -610,6 +610,49 @@ def telegram_testar(request: Request, db: Session = Depends(get_db)):
     return _config_redirect(request, erro="Telegram: " + detalhe)
 
 
+# ---- Central de disparos (envio manual de alertas) ----
+
+@app.post("/configuracao/disparar", dependencies=[Depends(require_admin)])
+def config_disparar(
+    request: Request,
+    tipo: str = Form(...),
+    canal_email: str = Form(""),
+    canal_telegram: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    from .services.notify import enviar_panorama_mensal, enviar_situacao_cota
+    via_email = bool(canal_email)
+    via_tg = bool(canal_telegram)
+    if not via_email and not via_tg:
+        return _config_redirect(request, erro="Escolha ao menos um canal")
+
+    if tipo == "situacao":
+        r = enviar_situacao_cota(db, via_email=via_email, via_telegram=via_tg)
+        if r.get("ok"):
+            return _config_redirect(
+                request,
+                msg=f"Situacao enviada (email={r['email_ok']}, telegram={r['telegram']})")
+        return _config_redirect(
+            request, erro="Falha ao enviar situacao: " + str(r.get("motivo", "sem canal")))
+
+    if tipo == "panorama":
+        # Panorama do MÊS ATUAL (parcial): passamos "hoje" como 1º dia do mês
+        # seguinte, para que _mes_anterior resolva o mês corrente.
+        hoje = date.today()
+        if hoje.month == 12:
+            nxt = date(hoje.year + 1, 1, 1)
+        else:
+            nxt = date(hoje.year, hoje.month + 1, 1)
+        r = enviar_panorama_mensal(db, hoje=nxt, forcar=True,
+                                   via_email=via_email, via_telegram=via_tg)
+        if r.get("enviado"):
+            return _config_redirect(request, msg=f"Panorama de {r.get('mes')} enviado")
+        return _config_redirect(
+            request, erro="Panorama nao enviado: " + str(r.get("motivo", "")))
+
+    return _config_redirect(request, erro="Tipo de disparo invalido")
+
+
 # ---- SEFAZ ----
 
 @app.post("/configuracao/sefaz", dependencies=[Depends(require_admin)])
