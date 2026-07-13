@@ -6,7 +6,10 @@
   <title>vetorIA — Diesel</title>
   <link rel="icon" href="/static/favicon.png">
   <link rel="apple-touch-icon" href="/static/favicon.png">
-  <link rel="stylesheet" href="/static/app.css?v=18">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css?v=19">
   <script>
     // tema aplicado antes da pintura para evitar flash
     (function(){
@@ -28,9 +31,9 @@
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   {% block head %}{% endblock %}
 </head>
-<body>
-  {% block topbar %}
-  <header class="topbar">
+<body class="{% block bodyclass %}{% endblock %}">
+  {% block sidebar %}
+  <aside class="sidebar">
     <a class="brand" href="/dashboard">
       {% if logo_urls and (logo_urls.light or logo_urls.dark) %}
         {% if logo_urls.light %}
@@ -42,30 +45,60 @@
       {% elif logo_url %}
         <img src="{{ logo_url }}" alt="{{ empresa_nome }}" class="logo">
       {% else %}
-        <span>{{ empresa_nome or 'Cota Diesel' }}</span>
+        <img src="/static/vetor-logo-escura.png" alt="{{ empresa_nome or 'vetorIA' }}" class="logo logo-light">
+        <img src="/static/vetor-logo-clara.png" alt="{{ empresa_nome or 'vetorIA' }}" class="logo logo-dark">
       {% endif %}
     </a>
-    <nav>
-      {% if current_user %}
-        <a href="/dashboard">Visão geral</a>
-        <a href="/relatorios">Relatórios</a>
-        {% if is_admin %}<a href="/configuracao">Configuração</a>{% endif %}
-      {% endif %}
-      <button type="button" class="theme-toggle"
-              onclick="toggleTheme()"
-              title="Alternar tema claro/escuro"
-              aria-label="Alternar tema">
-        <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
-      </button>
-      {% if current_user %}
-        <span class="user-info muted" title="{{ current_user.email }}">{{ current_user.nome or current_user.email }}</span>
-        <a href="/logout">Sair</a>
+    {% if current_user %}
+    <nav class="side-nav">
+      <a href="/dashboard" class="{% if request.path.startswith('/dashboard') %}is-active{% endif %}">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span class="txt">Visão geral</span>
+      </a>
+      <a href="/relatorios" class="{% if request.path.startswith('/relatorios') %}is-active{% endif %}">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        <span class="txt">Relatórios</span>
+      </a>
+      {% if is_admin %}
+      <a href="/configuracao" class="{% if request.path.startswith('/configuracao') %}is-active{% endif %}">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="txt">Configuração</span>
+      </a>
       {% endif %}
     </nav>
-  </header>
+    <div class="side-foot">
+      <a href="/logout" class="side-link">
+        <svg class="ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sair
+      </a>
+      <div class="side-user" title="{{ current_user.email }}">
+        <span class="avatar">{{ (current_user.nome or current_user.email)[:1]|upper }}</span>
+        <span>
+          <span class="su-name">{{ current_user.nome or current_user.email }}</span>
+          <span class="su-role">{% if is_admin %}Administrador{% else %}Usuário{% endif %}</span>
+        </span>
+      </div>
+    </div>
+    {% endif %}
+  </aside>
   {% endblock %}
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+  <div class="app-main">
+    {% block topbar %}
+    <header class="topbar">
+      <div class="topbar-slot">{% block topbar_slot %}{% endblock %}</div>
+      <nav>
+        <button type="button" class="theme-toggle"
+                onclick="toggleTheme()"
+                title="Alternar tema claro/escuro"
+                aria-label="Alternar tema">
+          <span class="theme-dark">🌙</span><span class="theme-light">☀</span>
+        </button>
+      </nav>
+    </header>
+    {% endblock %}
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </body>
 </html>

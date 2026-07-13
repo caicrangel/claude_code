@@ -1,4 +1,9 @@
 {% extends "base.html" %}
+{% block topbar_slot %}
+  <span class="period-chip"><span class="dot"></span>
+    {{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}{% if periodo.nome %} · {{ periodo.nome }}{% endif %}
+  </span>
+{% endblock %}
 {% block content %}
 <div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#painel" hx-target="#painel" hx-swap="outerHTML">
   <h1>{{ settings.EMPRESA_NOME }}</h1>
@@ -28,13 +33,33 @@
       </div>
     {% endif %}
 
-    <div class="bar"><div class="fill" style="width: {{ '%.1f'|format(pct if pct<100 else 100) }}%"></div></div>
-
-    <div class="kpi">
-      <div><strong>{{ consumo|litros }}</strong><span>consumido</span></div>
-      <div><strong>{{ cota|litros_curto }}</strong><span>cota</span></div>
-      <div><strong>{{ pct|pct }}</strong><span>uso</span></div>
-      <div><strong>{{ restante|litros }}</strong><span>restante</span></div>
+    {% set pct_capped = pct if pct < 100 else 100 %}
+    <div class="overview-top">
+      <div class="gauge-card">
+        <span class="gauge-title">Uso da cota</span>
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 210 210" width="210" height="210">
+            <circle class="g-track" cx="105" cy="105" r="90"></circle>
+            <circle class="g-fill" cx="105" cy="105" r="90"
+                    transform="rotate(-90 105 105)"
+                    stroke-dasharray="{{ '%.1f'|format(pct_capped * 5.6549) }} 565.49"></circle>
+          </svg>
+          <div class="gauge-center">
+            <span class="g-pct">{{ pct|pct }}</span>
+            <span class="g-label">da cota consumida</span>
+          </div>
+        </div>
+        <div class="gauge-foot">
+          <span><span class="gf-k">Consumido</span><br><span class="gf-v">{{ consumo|litros }}</span></span>
+          <span style="text-align:right;"><span class="gf-k">Restante</span><br><span class="gf-v ok">{{ restante|litros }}</span></span>
+        </div>
+      </div>
+      <div class="kpi">
+        <div><strong>{{ consumo|litros }}</strong><span>consumido</span></div>
+        <div><strong>{{ cota|litros_curto }}</strong><span>cota</span></div>
+        <div><strong>{{ pct|pct }}</strong><span>uso</span></div>
+        <div><strong>{{ restante|litros }}</strong><span>restante</span></div>
+      </div>
     </div>
 
     <div class="status-line">
