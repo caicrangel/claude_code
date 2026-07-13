@@ -212,7 +212,7 @@ button:hover { filter: brightness(1.06); }
 .gauge-foot .gf-v.ok { color: var(--ok); }
 
 /* área que agrupa gauge + KPIs no topo do dashboard */
-.overview-top { display: grid; grid-template-columns: 346px 1fr; gap: 1.1rem; margin: 1rem 0 1.1rem; align-items: stretch; }
+.overview-top { display: grid; grid-template-columns: 346px 1fr; gap: 1.1rem; margin: 1rem 0 1.1rem; align-items: center; }
 .overview-top .kpi { margin: 0; }
 
 /* === KPIs === */
@@ -221,7 +221,10 @@ button:hover { filter: brightness(1.06); }
   grid-template-columns: repeat(4, 1fr);
   margin: 1rem 0 1.5rem;
 }
-.overview-top .kpi { grid-template-columns: repeat(2, 1fr); }
+/* No overview: 3 KPIs empilhados ao lado do medidor, conteúdo centralizado
+   (evita cards "gigantes" com espaço vazio quando esticam pela altura). */
+.overview-top .kpi { grid-template-columns: 1fr; gap: 0.8rem; }
+.overview-top .kpi > div { display: flex; flex-direction: column; justify-content: center; }
 .kpi > div, .kpi-card {
   background: var(--panel); border: 1px solid var(--border);
   padding: 1.1rem 1.2rem; border-radius: var(--radius);
