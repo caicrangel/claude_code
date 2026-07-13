@@ -151,6 +151,7 @@
       muted: s.getPropertyValue('--muted').trim(),
       grid: s.getPropertyValue('--grid').trim(),
       accent: s.getPropertyValue('--accent').trim(),
+      panel: s.getPropertyValue('--panel').trim(),
       ok: s.getPropertyValue('--ok').trim(),
       warn: s.getPropertyValue('--warn').trim(),
       crit: s.getPropertyValue('--crit').trim(),
@@ -160,6 +161,16 @@
     return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: casas||0, maximumFractionDigits: casas||0});
   }
   function rs(v){ return 'R$ ' + fmt(v, 2); }
+  // Preenchimento em gradiente vertical (cor no topo → transparente embaixo).
+  function areaGradient(context, hex){
+    const chart = context.chart;
+    const {ctx, chartArea} = chart;
+    if(!chartArea) return hex + '22';           // 1ª render (área ainda não medida)
+    const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0, hex + '59');              // ~35% no topo
+    g.addColorStop(1, hex + '05');              // ~2% na base
+    return g;
+  }
 
   let chartF, chartM, chartN;
   function build(){
@@ -192,13 +203,20 @@
       data: {labels: data.mensal.labels,
              datasets: [
                {label: 'Litros', data: data.mensal.litros, yAxisID: 'y',
-                borderColor: c.accent, backgroundColor: c.accent+'33',
-                tension: 0.25, fill: true,
-                pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: c.accent},
+                borderColor: c.accent, borderWidth: 3,
+                backgroundColor: (ctx) => areaGradient(ctx, c.accent),
+                tension: 0.4, fill: true, cubicInterpolationMode: 'monotone',
+                pointRadius: 5, pointHoverRadius: 7,
+                pointBackgroundColor: c.accent,
+                pointBorderColor: c.panel, pointBorderWidth: 2,
+                pointHoverBorderColor: c.panel, pointHoverBorderWidth: 2},
                {label: 'Valor (R$)', data: data.mensal.valor, yAxisID: 'y2',
                 borderColor: c.warn, backgroundColor: 'transparent',
-                tension: 0.25, borderDash: [4,4],
-                pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: c.warn},
+                borderWidth: 2, tension: 0.4, borderDash: [4,4],
+                cubicInterpolationMode: 'monotone',
+                pointRadius: 3, pointHoverRadius: 5,
+                pointBackgroundColor: c.warn,
+                pointBorderColor: c.panel, pointBorderWidth: 1.5},
              ]},
       options: {responsive: true,
                 // Mostra ambos datasets ao passar o mouse, sem precisar acertar a linha.
