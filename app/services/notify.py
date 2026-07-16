@@ -64,12 +64,40 @@ def _destinatarios_ativos(db: Session) -> list[str]:
 # ---------- NFs novas (agrupado por ciclo) ----------
 
 def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
-                    resumo_cota: dict, logo_html: str = "") -> str:
+                    resumo_cota: dict, logo_html: str = "", acu: dict | None = None) -> str:
     pct = float(resumo_cota.get("pct") or 0)
     consumo = Decimal(str(resumo_cota.get("consumo") or 0))
     cota = Decimal(str(resumo_cota.get("cota") or 0))
     restante = Decimal(str(resumo_cota.get("restante") or 0))
     cor_uso = "#dc2626" if pct >= 95 else ("#d97706" if pct >= 70 else "#16a34a")
+
+    bloco_acu = ""
+    if acu:
+        bloco_acu = f"""
+      <div style="margin:20px 0 0;padding:16px 18px;background:#eff6ff;
+                  border:1px solid #bfdbfe;border-radius:10px;">
+        <div style="font-size:12px;color:#1d4ed8;font-weight:700;
+                    text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">
+          📆 Acumulado de {escape(acu['mes'])}
+        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+               style="border-collapse:collapse;">
+          <tr>
+            <td style="text-align:center;padding:4px;">
+              <div style="font-size:18px;font-weight:800;color:#0f172a;">{fmt_litros(acu['litros'])}</div>
+              <div style="font-size:11px;color:#64748b;">Total litros</div>
+            </td>
+            <td style="text-align:center;padding:4px;border-left:1px solid #bfdbfe;">
+              <div style="font-size:18px;font-weight:800;color:#0f172a;">{fmt_moeda(acu['valor'])}</div>
+              <div style="font-size:11px;color:#64748b;">Total valor</div>
+            </td>
+            <td style="text-align:center;padding:4px;border-left:1px solid #bfdbfe;">
+              <div style="font-size:18px;font-weight:800;color:#1d4ed8;">{fmt_moeda(acu['preco'])}/L</div>
+              <div style="font-size:11px;color:#64748b;">Preço médio</div>
+            </td>
+          </tr>
+        </table>
+      </div>"""
 
     total_litros = sum((Decimal(nf.litros_diesel or 0) for nf in nfs), Decimal(0))
     total_valor = sum((Decimal(nf.valor_total or 0) for nf in nfs), Decimal(0))
@@ -145,6 +173,7 @@ def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
         </thead>
         <tbody>{linhas}</tbody>
       </table>
+      {bloco_acu}
     </td></tr>
     <tr><td style="background:#f8fafc;padding:14px 24px;font-size:11px;
                    color:#94a3b8;border-top:1px solid #e2e8f0;">
@@ -155,7 +184,7 @@ def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
 
 
 def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
-                     resumo_cota: dict) -> str:
+                     resumo_cota: dict, acu: dict | None = None) -> str:
     pct = float(resumo_cota.get("pct") or 0)
     consumo = Decimal(str(resumo_cota.get("consumo") or 0))
     cota = Decimal(str(resumo_cota.get("cota") or 0))
@@ -166,13 +195,49 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
         f"{fmt_litros(nf.litros_diesel or 0)} {fmt_moeda(nf.valor_total or 0)}"
         for nf in nfs
     )
+    bloco_acu = ""
+    if acu:
+        bloco_acu = (
+            f"\nAcumulado de {acu['mes']}:\n"
+            f"  Litros: {fmt_litros(acu['litros'])}\n"
+            f"  Valor: {fmt_moeda(acu['valor'])}\n"
+            f"  Preço médio: {fmt_moeda(acu['preco'])}/L\n"
+        )
     return (
         f"{empresa} (CNPJ {cnpj})\n\n"
         f"{len(nfs)} nova(s) NF de diesel registrada(s):\n"
         f"Total do lote: {fmt_litros(total_litros)}\n\n"
         f"{linhas}\n\n"
         f"Consumo acumulado: {fmt_litros(consumo)} ({fmt_pct(pct)} de {fmt_litros(cota)})\n"
+        f"{bloco_acu}"
     )
+
+
+def _acumulado_mes(db: Session, ref) -> dict:
+    """Acumulado do mês-calendário de `ref` (litros, valor, preço médio),
+    somando as NFs que entram na cota (não resumo/cancelada/excluída).
+    Zera naturalmente a cada mês — é sempre a soma do mês da NF emitida."""
+    ini = date(ref.year, ref.month, 1)
+    prox = date(ref.year + 1, 1, 1) if ref.month == 12 else date(ref.year, ref.month + 1, 1)
+    row = (
+        db.query(
+            func.coalesce(func.sum(NotaFiscal.litros_diesel), 0),
+            func.coalesce(func.sum(NotaFiscal.valor_total), 0),
+        )
+        .filter(
+            NotaFiscal.data_emissao >= ini,
+            NotaFiscal.data_emissao < prox,
+            NotaFiscal.is_resumo.is_(False),
+            NotaFiscal.cancelada.is_(False),
+            NotaFiscal.excluida_cota.is_(False),
+        )
+        .one()
+    )
+    litros = Decimal(row[0] or 0)
+    valor = Decimal(row[1] or 0)
+    preco = (valor / litros) if litros else Decimal(0)
+    return {"mes": ini.strftime("%m/%Y"), "litros": litros,
+            "valor": valor, "preco": preco}
 
 
 def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
@@ -187,6 +252,11 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     total_litros = sum((Decimal(nf.litros_diesel or 0) for nf in nfs), Decimal(0))
     plural = "s" if len(nfs) > 1 else ""
 
+    # Acumulado do mês da NF emitida (mês vigente; zera a cada virada de mês).
+    datas = [nf.data_emissao for nf in nfs if nf.data_emissao]
+    ref = max(datas) if datas else date.today()
+    acu = _acumulado_mes(db, ref)
+
     if via_telegram:
         tg_linhas = "\n".join(
             f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
@@ -199,6 +269,10 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
             f"{len(nfs)} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
             f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
             + ("\n…" if len(nfs) > 15 else "")
+            + f"\n\n📆 <b>Acumulado de {escape(acu['mes'])}</b>\n"
+            + f"Litros: <b>{escape(fmt_litros(acu['litros']))}</b>\n"
+            + f"Valor: <b>{escape(fmt_moeda(acu['valor']))}</b>\n"
+            + f"Preço médio: <b>{escape(fmt_moeda(acu['preco']))}/L</b>"
         )
         telegram.send_message(tg_text, db=db)
 
@@ -208,8 +282,8 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     subject = (f"[Cota Diesel] {empresa} — {len(nfs)} nova{plural} "
                f"NF · {fmt_pct(pct)} da cota")
     logo_src, logo_img = logo_para_email(db)
-    text = _texto_nfs_novas(empresa, cnpj, nfs, resumo_cota)
-    html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota, bloco_logo(logo_src))
+    text = _texto_nfs_novas(empresa, cnpj, nfs, resumo_cota, acu)
+    html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota, bloco_logo(logo_src), acu)
     inline = [logo_img] if logo_img else None
     enviados = 0
     for dest in destinatarios:
