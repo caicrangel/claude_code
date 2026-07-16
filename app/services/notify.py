@@ -24,7 +24,7 @@ from .email import send_email
 from .logo_email import bloco_html as bloco_logo
 from .logo_email import logo_para_email
 from .periodo import get_periodo_ativo
-from .quota import litros_consumidos, percentual
+from .quota import cond_pertence_periodo, litros_consumidos, percentual
 from .report_pdf import gerar_pdf_panorama
 
 log = logging.getLogger(__name__)
@@ -233,12 +233,23 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
     )
 
 
-def _acumulado_mes(db: Session, ref) -> dict:
+def _acumulado_mes(db: Session, ref, periodo=None) -> dict:
     """Descritivo do mês-calendário de `ref`, agrupado POR FORNECEDOR
     (notas, litros, valor, R$/L) + totais. Considera só NFs na cota
-    (não resumo/cancelada/excluída). Zera a cada virada de mês."""
+    (não resumo/cancelada/excluída) e — quando `periodo` é informado —
+    apenas as que pertencem ao período de cota ativo (respeita a virada
+    de período no meio do mês, ex.: liminar). Zera a cada virada de mês."""
     ini = date(ref.year, ref.month, 1)
     prox = date(ref.year + 1, 1, 1) if ref.month == 12 else date(ref.year, ref.month + 1, 1)
+    filtros = [
+        NotaFiscal.data_emissao >= ini,
+        NotaFiscal.data_emissao < prox,
+        NotaFiscal.is_resumo.is_(False),
+        NotaFiscal.cancelada.is_(False),
+        NotaFiscal.excluida_cota.is_(False),
+    ]
+    if periodo is not None:
+        filtros.append(cond_pertence_periodo(periodo))
     rows = (
         db.query(
             NotaFiscal.emitente_nome,
@@ -247,13 +258,7 @@ def _acumulado_mes(db: Session, ref) -> dict:
             func.coalesce(func.sum(NotaFiscal.litros_diesel), 0).label("litros"),
             func.coalesce(func.sum(NotaFiscal.valor_total), 0).label("valor"),
         )
-        .filter(
-            NotaFiscal.data_emissao >= ini,
-            NotaFiscal.data_emissao < prox,
-            NotaFiscal.is_resumo.is_(False),
-            NotaFiscal.cancelada.is_(False),
-            NotaFiscal.excluida_cota.is_(False),
-        )
+        .filter(*filtros)
         .group_by(NotaFiscal.emitente_nome, NotaFiscal.emitente_cnpj)
         .order_by(func.sum(NotaFiscal.litros_diesel).desc())
         .all()
@@ -298,10 +303,11 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     total_litros = sum((Decimal(nf.litros_diesel or 0) for nf in nfs), Decimal(0))
     plural = "s" if len(nfs) > 1 else ""
 
-    # Acumulado do mês da NF emitida (mês vigente; zera a cada virada de mês).
+    # Acumulado do mês da NF emitida, respeitando o período de cota ativo
+    # (zera a cada virada de mês; não mistura NFs de outro período).
     datas = [nf.data_emissao for nf in nfs if nf.data_emissao]
     ref = max(datas) if datas else date.today()
-    acu = _acumulado_mes(db, ref)
+    acu = _acumulado_mes(db, ref, get_periodo_ativo(db))
 
     if via_telegram:
         tg_linhas = "\n".join(
