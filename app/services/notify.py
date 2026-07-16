@@ -73,29 +73,44 @@ def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
 
     bloco_acu = ""
     if acu:
+        linhas_forn = "".join(
+            f"""<tr>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;">{escape(f['nome'][:34])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;">{f['notas']}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_litros(f['litros'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(f['valor'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(f['preco'])}</td>
+            </tr>"""
+            for f in acu["fornecedores"]
+        )
         bloco_acu = f"""
-      <div style="margin:20px 0 0;padding:16px 18px;background:#eff6ff;
+      <div style="margin:22px 0 0;padding:16px 18px;background:#eff6ff;
                   border:1px solid #bfdbfe;border-radius:10px;">
         <div style="font-size:12px;color:#1d4ed8;font-weight:700;
                     text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">
-          📆 Acumulado de {escape(acu['mes'])}
+          📆 Compras acumuladas de {escape(acu['mes'])} — por fornecedor
         </div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-               style="border-collapse:collapse;">
-          <tr>
-            <td style="text-align:center;padding:4px;">
-              <div style="font-size:18px;font-weight:800;color:#0f172a;">{fmt_litros(acu['litros'])}</div>
-              <div style="font-size:11px;color:#64748b;">Total litros</div>
-            </td>
-            <td style="text-align:center;padding:4px;border-left:1px solid #bfdbfe;">
-              <div style="font-size:18px;font-weight:800;color:#0f172a;">{fmt_moeda(acu['valor'])}</div>
-              <div style="font-size:11px;color:#64748b;">Total valor</div>
-            </td>
-            <td style="text-align:center;padding:4px;border-left:1px solid #bfdbfe;">
-              <div style="font-size:18px;font-weight:800;color:#1d4ed8;">{fmt_moeda(acu['preco'])}/L</div>
-              <div style="font-size:11px;color:#64748b;">Preço médio</div>
-            </td>
-          </tr>
+               style="border-collapse:collapse;background:#ffffff;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#dbeafe;">
+              <th style="padding:7px 8px;text-align:left;font-size:10px;color:#1e40af;text-transform:uppercase;">Fornecedor</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Notas</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Litros</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Valor</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">R$/L</th>
+            </tr>
+          </thead>
+          <tbody>{linhas_forn}</tbody>
+          <tfoot>
+            <tr style="background:#eff6ff;">
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;color:#0f172a;">TOTAL</td>
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;">{acu['total_notas']}</td>
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;">{fmt_litros(acu['total_litros'])}</td>
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;">{fmt_moeda(acu['total_valor'])}</td>
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;color:#1d4ed8;">{fmt_moeda(acu['preco'])}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>"""
 
@@ -197,11 +212,16 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
     )
     bloco_acu = ""
     if acu:
+        forn = "\n".join(
+            f"  - {f['nome']}: {f['notas']} NF · {fmt_litros(f['litros'])} · "
+            f"{fmt_moeda(f['valor'])} · {fmt_moeda(f['preco'])}/L"
+            for f in acu["fornecedores"]
+        )
         bloco_acu = (
-            f"\nAcumulado de {acu['mes']}:\n"
-            f"  Litros: {fmt_litros(acu['litros'])}\n"
-            f"  Valor: {fmt_moeda(acu['valor'])}\n"
-            f"  Preço médio: {fmt_moeda(acu['preco'])}/L\n"
+            f"\nCompras acumuladas de {acu['mes']} (por fornecedor):\n"
+            f"{forn}\n"
+            f"  TOTAL: {acu['total_notas']} NF · {fmt_litros(acu['total_litros'])} · "
+            f"{fmt_moeda(acu['total_valor'])} · {fmt_moeda(acu['preco'])}/L\n"
         )
     return (
         f"{empresa} (CNPJ {cnpj})\n\n"
@@ -214,15 +234,18 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
 
 
 def _acumulado_mes(db: Session, ref) -> dict:
-    """Acumulado do mês-calendário de `ref` (litros, valor, preço médio),
-    somando as NFs que entram na cota (não resumo/cancelada/excluída).
-    Zera naturalmente a cada mês — é sempre a soma do mês da NF emitida."""
+    """Descritivo do mês-calendário de `ref`, agrupado POR FORNECEDOR
+    (notas, litros, valor, R$/L) + totais. Considera só NFs na cota
+    (não resumo/cancelada/excluída). Zera a cada virada de mês."""
     ini = date(ref.year, ref.month, 1)
     prox = date(ref.year + 1, 1, 1) if ref.month == 12 else date(ref.year, ref.month + 1, 1)
-    row = (
+    rows = (
         db.query(
-            func.coalesce(func.sum(NotaFiscal.litros_diesel), 0),
-            func.coalesce(func.sum(NotaFiscal.valor_total), 0),
+            NotaFiscal.emitente_nome,
+            NotaFiscal.emitente_cnpj,
+            func.count(NotaFiscal.id).label("notas"),
+            func.coalesce(func.sum(NotaFiscal.litros_diesel), 0).label("litros"),
+            func.coalesce(func.sum(NotaFiscal.valor_total), 0).label("valor"),
         )
         .filter(
             NotaFiscal.data_emissao >= ini,
@@ -231,13 +254,36 @@ def _acumulado_mes(db: Session, ref) -> dict:
             NotaFiscal.cancelada.is_(False),
             NotaFiscal.excluida_cota.is_(False),
         )
-        .one()
+        .group_by(NotaFiscal.emitente_nome, NotaFiscal.emitente_cnpj)
+        .order_by(func.sum(NotaFiscal.litros_diesel).desc())
+        .all()
     )
-    litros = Decimal(row[0] or 0)
-    valor = Decimal(row[1] or 0)
-    preco = (valor / litros) if litros else Decimal(0)
-    return {"mes": ini.strftime("%m/%Y"), "litros": litros,
-            "valor": valor, "preco": preco}
+    fornecedores = []
+    tot_litros = Decimal(0)
+    tot_valor = Decimal(0)
+    tot_notas = 0
+    for r in rows:
+        litros = Decimal(r.litros or 0)
+        valor = Decimal(r.valor or 0)
+        fornecedores.append({
+            "nome": r.emitente_nome or "—",
+            "cnpj": r.emitente_cnpj or "—",
+            "notas": int(r.notas or 0),
+            "litros": litros,
+            "valor": valor,
+            "preco": (valor / litros) if litros else Decimal(0),
+        })
+        tot_litros += litros
+        tot_valor += valor
+        tot_notas += int(r.notas or 0)
+    return {
+        "mes": ini.strftime("%m/%Y"),
+        "fornecedores": fornecedores,
+        "total_notas": tot_notas,
+        "total_litros": tot_litros,
+        "total_valor": tot_valor,
+        "preco": (tot_valor / tot_litros) if tot_litros else Decimal(0),
+    }
 
 
 def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
@@ -269,10 +315,15 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
             f"{len(nfs)} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
             f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
             + ("\n…" if len(nfs) > 15 else "")
-            + f"\n\n📆 <b>Acumulado de {escape(acu['mes'])}</b>\n"
-            + f"Litros: <b>{escape(fmt_litros(acu['litros']))}</b>\n"
-            + f"Valor: <b>{escape(fmt_moeda(acu['valor']))}</b>\n"
-            + f"Preço médio: <b>{escape(fmt_moeda(acu['preco']))}/L</b>"
+            + f"\n\n📆 <b>Compras de {escape(acu['mes'])} (por fornecedor)</b>\n"
+            + "\n".join(
+                f"• {escape(f['nome'][:30])}: {escape(fmt_litros(f['litros']))} · "
+                f"{escape(fmt_moeda(f['valor']))} · {escape(fmt_moeda(f['preco']))}/L"
+                for f in acu["fornecedores"]
+            )
+            + f"\n<b>TOTAL: {escape(fmt_litros(acu['total_litros']))} · "
+            + f"{escape(fmt_moeda(acu['total_valor']))} · "
+            + f"{escape(fmt_moeda(acu['preco']))}/L</b>"
         )
         telegram.send_message(tg_text, db=db)
 
