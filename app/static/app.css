@@ -69,23 +69,23 @@ h3 { font-weight: 700; }
   position: sticky; top: 0; height: 100vh;
   transition: width 0.18s ease, padding 0.18s ease;
 }
-.brand-row { display: flex; align-items: center; gap: 6px; }
 .sidebar .brand {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 4px 6px; min-height: 44px; flex: 1; min-width: 0;
+  padding: 4px 6px; min-height: 44px; min-width: 0;
 }
 .sidebar .brand:hover { text-decoration: none; }
 .sidebar .brand .logo { width: 100%; max-width: 190px; height: auto; max-height: 56px; object-fit: contain; object-position: left center; }
 .sidebar .brand .brand-fallback { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--text); }
 
 .sidebar-collapse {
-  flex: none; width: 30px; height: 30px; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 12px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); font-weight: 600; font-size: 0.92rem;
+  cursor: pointer; width: 100%; text-align: left; font-family: inherit;
 }
 .sidebar-collapse:hover { border-color: var(--accent); color: var(--accent); filter: none; }
-.sidebar-collapse .ico { width: 15px; height: 15px; }
+.sidebar-collapse .ico { width: 17px; height: 17px; flex: none; }
 
 .side-nav { display: flex; flex-direction: column; gap: 4px; }
 .side-nav a {
@@ -113,11 +113,12 @@ h3 { font-weight: 700; }
 .side-user .su-role { font-size: 0.68rem; color: var(--muted); }
 
 /* === Sidebar recolhida === */
-:root[data-sidebar="collapsed"] .sidebar { width: 72px; padding-left: 12px; padding-right: 12px; }
-:root[data-sidebar="collapsed"] .brand-row { flex-direction: column; gap: 10px; }
-:root[data-sidebar="collapsed"] .sidebar .brand { display: none; }
-:root[data-sidebar="collapsed"] .sidebar-collapse { align-self: center; }
+:root[data-sidebar="collapsed"] .sidebar { width: 76px; padding-left: 10px; padding-right: 10px; }
+:root[data-sidebar="collapsed"] .sidebar .brand { justify-content: center; padding: 4px 0; }
+:root[data-sidebar="collapsed"] .sidebar .brand .logo { max-width: 100%; }
+:root[data-sidebar="collapsed"] .sidebar-collapse { justify-content: center; padding: 11px 0; }
 :root[data-sidebar="collapsed"] .side-nav a { justify-content: center; padding: 11px 0; }
+:root[data-sidebar="collapsed"] .sidebar-collapse .txt,
 :root[data-sidebar="collapsed"] .side-nav a .txt,
 :root[data-sidebar="collapsed"] .side-foot .txt,
 :root[data-sidebar="collapsed"] .side-user .su-name,
