@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block topbar_slot %}
-  <span class="period-chip"><span class="dot"></span>
-    {{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}{% if periodo.nome %} · {{ periodo.nome }}{% endif %}
-  </span>
+  <div class="topbar-slot">
+    <span class="period-chip"><span class="dot"></span>
+      {{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}{% if periodo.nome %} · {{ periodo.nome }}{% endif %}
+    </span>
+  </div>
 {% endblock %}
 {% block content %}
 <div class="page" hx-get="/dashboard" hx-trigger="every 60s" hx-select="#painel" hx-target="#painel" hx-swap="outerHTML">
