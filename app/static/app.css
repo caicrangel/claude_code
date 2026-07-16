@@ -77,15 +77,7 @@ h3 { font-weight: 700; }
 .sidebar .brand .logo { width: 100%; max-width: 190px; height: auto; max-height: 56px; object-fit: contain; object-position: left center; }
 .sidebar .brand .brand-fallback { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--text); }
 
-.sidebar-collapse {
-  display: flex; align-items: center; gap: 11px;
-  padding: 11px 12px; border-radius: var(--radius-sm);
-  background: transparent; border: 1px solid var(--border);
-  color: var(--muted); font-weight: 600; font-size: 0.92rem;
-  cursor: pointer; width: 100%; text-align: left; font-family: inherit;
-}
-.sidebar-collapse:hover { border-color: var(--accent); color: var(--accent); filter: none; }
-.sidebar-collapse .ico { width: 17px; height: 17px; flex: none; }
+.side-foot .sidebar-collapse .ico { width: 15px; height: 15px; flex: none; }
 
 .side-nav { display: flex; flex-direction: column; gap: 4px; }
 .side-nav a {
@@ -116,9 +108,7 @@ h3 { font-weight: 700; }
 :root[data-sidebar="collapsed"] .sidebar { width: 76px; padding-left: 10px; padding-right: 10px; }
 :root[data-sidebar="collapsed"] .sidebar .brand { justify-content: center; padding: 4px 0; }
 :root[data-sidebar="collapsed"] .sidebar .brand .logo { max-width: 100%; }
-:root[data-sidebar="collapsed"] .sidebar-collapse { justify-content: center; padding: 11px 0; }
 :root[data-sidebar="collapsed"] .side-nav a { justify-content: center; padding: 11px 0; }
-:root[data-sidebar="collapsed"] .sidebar-collapse .txt,
 :root[data-sidebar="collapsed"] .side-nav a .txt,
 :root[data-sidebar="collapsed"] .side-foot .txt,
 :root[data-sidebar="collapsed"] .side-user .su-name,
