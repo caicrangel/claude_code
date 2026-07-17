@@ -32,6 +32,11 @@
         document.dispatchEvent(new CustomEvent('themechange', {detail: n}));
       } catch(e) { console.error('toggleTheme', e); }
     }
+    // Se a página for restaurada do back/forward cache (botão "voltar"),
+    // recarrega do servidor — quem fez logout é redirecionado ao login.
+    window.addEventListener('pageshow', function(ev){
+      if (ev.persisted) { window.location.reload(); }
+    });
     function toggleSidebar(){
       try {
         var collapsed = document.documentElement.getAttribute('data-sidebar') === 'collapsed';

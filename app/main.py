@@ -47,6 +47,23 @@ log = logging.getLogger(__name__)
 app = FastAPI(title=f"Cota Diesel - {settings.EMPRESA_NOME}")
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, https_only=False)
 
+
+@app.middleware("http")
+async def no_cache_paginas(request: Request, call_next):
+    """Impede que páginas autenticadas fiquem no cache do navegador.
+
+    Sem isso, após o logout o botão "voltar" restaura a página do
+    cache (bfcache/disk) sem consultar o servidor, exibindo dados a
+    quem não está mais logado. `no-store` também exclui a página do
+    back/forward cache nos navegadores modernos.
+    """
+    response = await call_next(request)
+    if not request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 fmt.register(templates.env)
