@@ -114,7 +114,7 @@
       <thead>
         <tr>
           <th>Emissão</th><th class="num">Nº NF</th><th>Emitente</th><th>Natureza da operação</th>
-          <th class="num">Litros</th><th class="num">Valor</th>
+          <th class="num">Litros</th><th class="num">Valor</th><th class="num">R$/L</th>
           <th class="center">Status</th><th class="center">Ações</th>
         </tr>
       </thead>
@@ -127,6 +127,7 @@
             <td class="muted">{{ n.natureza_operacao or '—' }}</td>
             <td class="num">{{ n.litros_diesel|numero }}</td>
             <td class="num">{{ n.valor_total|numero }}</td>
+            <td class="num">{% if n.litros_diesel %}{{ (n.valor_total / n.litros_diesel)|moeda }}{% else %}—{% endif %}</td>
             <td class="center">
               <div class="status-tags">
                 {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
@@ -159,7 +160,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="8" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
+          <tr><td colspan="9" class="muted">Nenhuma nota de diesel registrada ainda.</td></tr>
         {% endfor %}
       </tbody>
     </table>
