@@ -73,39 +73,41 @@ def _html_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
 
     bloco_acu = ""
     if acu:
-        linhas_forn = "".join(
+        linhas_acu = "".join(
             f"""<tr>
-              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;">{escape(f['nome'][:34])}</td>
-              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;">{f['notas']}</td>
-              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_litros(f['litros'])}</td>
-              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(f['valor'])}</td>
-              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(f['preco'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;white-space:nowrap;">{escape(fmt_data_curta(n['data']) if n['data'] else '—')}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;">{escape(n['numero'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;">{escape(n['nome'][:34])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_litros(n['litros'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(n['valor'])}</td>
+              <td style="padding:7px 8px;border-top:1px solid #e2e8f0;font-size:12px;text-align:right;white-space:nowrap;">{fmt_moeda(n['preco'])}</td>
             </tr>"""
-            for f in acu["fornecedores"]
+            for n in acu["notas"]
         )
         bloco_acu = f"""
       <div style="margin:22px 0 0;padding:16px 18px;background:#eff6ff;
                   border:1px solid #bfdbfe;border-radius:10px;">
         <div style="font-size:12px;color:#1d4ed8;font-weight:700;
                     text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">
-          📆 Compras acumuladas de {escape(acu['mes'])} — por fornecedor
+          📆 Compras acumuladas de {escape(acu['mes'])} — nota a nota
         </div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
                style="border-collapse:collapse;background:#ffffff;border-radius:8px;overflow:hidden;">
           <thead>
             <tr style="background:#dbeafe;">
+              <th style="padding:7px 8px;text-align:left;font-size:10px;color:#1e40af;text-transform:uppercase;">Emissão</th>
+              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Nº NF</th>
               <th style="padding:7px 8px;text-align:left;font-size:10px;color:#1e40af;text-transform:uppercase;">Fornecedor</th>
-              <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Notas</th>
               <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Litros</th>
               <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">Valor</th>
               <th style="padding:7px 8px;text-align:right;font-size:10px;color:#1e40af;text-transform:uppercase;">R$/L</th>
             </tr>
           </thead>
-          <tbody>{linhas_forn}</tbody>
+          <tbody>{linhas_acu}</tbody>
           <tfoot>
             <tr style="background:#eff6ff;">
-              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;color:#0f172a;">TOTAL</td>
-              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;">{acu['total_notas']}</td>
+              <td colspan="2" style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;color:#0f172a;">TOTAL</td>
+              <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;">{acu['total_notas']} NF</td>
               <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;">{fmt_litros(acu['total_litros'])}</td>
               <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;">{fmt_moeda(acu['total_valor'])}</td>
               <td style="padding:9px 8px;border-top:2px solid #bfdbfe;font-size:12px;font-weight:800;text-align:right;white-space:nowrap;color:#1d4ed8;">{fmt_moeda(acu['preco'])}</td>
@@ -212,14 +214,15 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
     )
     bloco_acu = ""
     if acu:
-        forn = "\n".join(
-            f"  - {f['nome']}: {f['notas']} NF · {fmt_litros(f['litros'])} · "
-            f"{fmt_moeda(f['valor'])} · {fmt_moeda(f['preco'])}/L"
-            for f in acu["fornecedores"]
+        notas_acu = "\n".join(
+            f"  - {fmt_data_curta(n['data']) if n['data'] else '—'} "
+            f"NF {n['numero']} {n['nome']}: {fmt_litros(n['litros'])} · "
+            f"{fmt_moeda(n['valor'])} · {fmt_moeda(n['preco'])}/L"
+            for n in acu["notas"]
         )
         bloco_acu = (
-            f"\nCompras acumuladas de {acu['mes']} (por fornecedor):\n"
-            f"{forn}\n"
+            f"\nCompras acumuladas de {acu['mes']} (nota a nota):\n"
+            f"{notas_acu}\n"
             f"  TOTAL: {acu['total_notas']} NF · {fmt_litros(acu['total_litros'])} · "
             f"{fmt_moeda(acu['total_valor'])} · {fmt_moeda(acu['preco'])}/L\n"
         )
@@ -234,8 +237,8 @@ def _texto_nfs_novas(empresa: str, cnpj: str, nfs: list[NotaFiscal],
 
 
 def _acumulado_mes(db: Session, ref, periodo=None) -> dict:
-    """Descritivo do mês-calendário de `ref`, agrupado POR FORNECEDOR
-    (notas, litros, valor, R$/L) + totais. Considera só NFs na cota
+    """Descritivo do mês-calendário de `ref`, NF por NF (data, número,
+    fornecedor, litros, valor, R$/L) + totais. Considera só NFs na cota
     (não resumo/cancelada/excluída) e — quando `periodo` é informado —
     apenas as que pertencem ao período de cota ativo (respeita a virada
     de período no meio do mês, ex.: liminar). Zera a cada virada de mês."""
@@ -251,40 +254,31 @@ def _acumulado_mes(db: Session, ref, periodo=None) -> dict:
     if periodo is not None:
         filtros.append(cond_pertence_periodo(periodo))
     rows = (
-        db.query(
-            NotaFiscal.emitente_nome,
-            NotaFiscal.emitente_cnpj,
-            func.count(NotaFiscal.id).label("notas"),
-            func.coalesce(func.sum(NotaFiscal.litros_diesel), 0).label("litros"),
-            func.coalesce(func.sum(NotaFiscal.valor_total), 0).label("valor"),
-        )
+        db.query(NotaFiscal)
         .filter(*filtros)
-        .group_by(NotaFiscal.emitente_nome, NotaFiscal.emitente_cnpj)
-        .order_by(func.sum(NotaFiscal.litros_diesel).desc())
+        .order_by(NotaFiscal.data_emissao.asc(), NotaFiscal.id.asc())
         .all()
     )
-    fornecedores = []
+    notas = []
     tot_litros = Decimal(0)
     tot_valor = Decimal(0)
-    tot_notas = 0
-    for r in rows:
-        litros = Decimal(r.litros or 0)
-        valor = Decimal(r.valor or 0)
-        fornecedores.append({
-            "nome": r.emitente_nome or "—",
-            "cnpj": r.emitente_cnpj or "—",
-            "notas": int(r.notas or 0),
+    for nf in rows:
+        litros = Decimal(nf.litros_diesel or 0)
+        valor = Decimal(nf.valor_total or 0)
+        notas.append({
+            "data": nf.data_emissao,
+            "numero": nf.numero or "—",
+            "nome": nf.emitente_nome or "—",
             "litros": litros,
             "valor": valor,
             "preco": (valor / litros) if litros else Decimal(0),
         })
         tot_litros += litros
         tot_valor += valor
-        tot_notas += int(r.notas or 0)
     return {
         "mes": ini.strftime("%m/%Y"),
-        "fornecedores": fornecedores,
-        "total_notas": tot_notas,
+        "notas": notas,
+        "total_notas": len(notas),
         "total_litros": tot_litros,
         "total_valor": tot_valor,
         "preco": (tot_valor / tot_litros) if tot_litros else Decimal(0),
@@ -321,12 +315,15 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
             f"{len(nfs)} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
             f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
             + ("\n…" if len(nfs) > 15 else "")
-            + f"\n\n📆 <b>Compras de {escape(acu['mes'])} (por fornecedor)</b>\n"
+            + f"\n\n📆 <b>Compras de {escape(acu['mes'])} (nota a nota)</b>\n"
             + "\n".join(
-                f"• {escape(f['nome'][:30])}: {escape(fmt_litros(f['litros']))} · "
-                f"{escape(fmt_moeda(f['valor']))} · {escape(fmt_moeda(f['preco']))}/L"
-                for f in acu["fornecedores"]
+                f"• {escape(fmt_data_curta(n['data']) if n['data'] else '—')} "
+                f"NF {escape(n['numero'])} {escape(n['nome'][:26])}: "
+                f"{escape(fmt_litros(n['litros']))} · {escape(fmt_moeda(n['valor']))} · "
+                f"{escape(fmt_moeda(n['preco']))}/L"
+                for n in acu["notas"][:20]
             )
+            + ("\n…" if len(acu["notas"]) > 20 else "")
             + f"\n<b>TOTAL: {escape(fmt_litros(acu['total_litros']))} · "
             + f"{escape(fmt_moeda(acu['total_valor']))} · "
             + f"{escape(fmt_moeda(acu['preco']))}/L</b>"
