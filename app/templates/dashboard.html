@@ -110,7 +110,7 @@
     </div>
 
     <h2>Notas de diesel no período ({{ total_notas|inteiro }}{% if total_notas > notas|length %} — exibindo {{ notas|length|inteiro }} mais recentes{% endif %})</h2>
-    <table>
+    <table class="table-cards">
       <thead>
         <tr>
           <th>Emissão</th><th class="num">Nº NF</th><th>Emitente</th><th>Natureza da operação</th>
@@ -121,14 +121,14 @@
       <tbody>
         {% for n in notas %}
           <tr class="{% if n.cancelada %}row-cancelada{% elif n.excluida_cota %}row-excluida{% endif %}">
-            <td>{{ n.data_emissao|data }}</td>
-            <td class="num">{{ n.numero or '—' }}</td>
-            <td>{{ n.emitente_nome }}</td>
-            <td class="muted">{{ n.natureza_operacao or '—' }}</td>
-            <td class="num">{{ n.litros_diesel|numero }}</td>
-            <td class="num">{{ n.valor_total|numero }}</td>
-            <td class="num">{% if n.litros_diesel %}{{ (n.valor_total / n.litros_diesel)|moeda }}{% else %}—{% endif %}</td>
-            <td class="center">
+            <td data-label="Emissão">{{ n.data_emissao|data }}</td>
+            <td class="num" data-label="Nº NF">{{ n.numero or '—' }}</td>
+            <td data-label="Emitente">{{ n.emitente_nome }}</td>
+            <td class="muted" data-label="Natureza">{{ n.natureza_operacao or '—' }}</td>
+            <td class="num" data-label="Litros">{{ n.litros_diesel|numero }}</td>
+            <td class="num" data-label="Valor">{{ n.valor_total|numero }}</td>
+            <td class="num" data-label="R$/L">{% if n.litros_diesel %}{{ (n.valor_total / n.litros_diesel)|moeda }}{% else %}—{% endif %}</td>
+            <td class="center" data-label="Status">
               <div class="status-tags">
                 {% if n.cancelada %}<span class="tag tag-crit">cancelada</span>
                 {% elif n.excluida_cota %}<span class="tag tag-warn">fora da cota</span>
@@ -136,7 +136,7 @@
                 {% if n.id in incluidas_ids %}<span class="tag tag-fixada" title="NF incluída manualmente neste período (além do período natural da data)">📌 incluída</span>{% endif %}
               </div>
             </td>
-            <td class="acoes">
+            <td class="acoes" data-label="Ações">
               {% if not n.cancelada %}
                 <form method="post" action="/notas/{{ n.id }}/toggle-cota" style="display:inline"
                       onsubmit="return confirm({% if n.excluida_cota %}'Incluir esta NF de volta no cálculo da cota?\n\n{{ n.litros_diesel|litros }} serão SOMADOS ao consumo.'{% else %}'Excluir esta NF do cálculo da cota?\n\nNatureza: {{ n.natureza_operacao or '—' }}\nLitros: {{ n.litros_diesel|litros }}\n\nA NF continua no histórico, apenas não conta no consumo.'{% endif %});">

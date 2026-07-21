@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/app.css?v=23">
+  <link rel="stylesheet" href="/static/app.css?v=24">
   <script>
     // tema e recolhimento da sidebar aplicados antes da pintura para evitar flash
     (function(){
@@ -49,6 +49,18 @@
         }
       } catch(e) { console.error('toggleSidebar', e); }
     }
+    // Gaveta de navegação no mobile (off-canvas).
+    function closeNav(){ document.documentElement.removeAttribute('data-mobile-nav'); }
+    function toggleMobileNav(){
+      var open = document.documentElement.getAttribute('data-mobile-nav') === 'open';
+      if (open) closeNav();
+      else document.documentElement.setAttribute('data-mobile-nav', 'open');
+    }
+    document.addEventListener('click', function(e){
+      // Fecha a gaveta ao tocar num link de navegação.
+      if (e.target.closest && e.target.closest('.side-nav a, .side-foot a')) closeNav();
+    });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeNav(); });
   </script>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   {% block head %}{% endblock %}
@@ -114,8 +126,20 @@
     </div>
     {% endif %}
   </aside>
+  {% if current_user %}<div class="nav-backdrop" onclick="closeNav()"></div>{% endif %}
   {% endblock %}
   <div class="app-main">
+    {% if current_user %}
+    <header class="mobile-topbar">
+      <button type="button" class="hamburger" onclick="toggleMobileNav()" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <a href="/dashboard" class="mobile-brand">
+        <img src="{{ (logo_urls and logo_urls.light) or logo_url or '/static/vetor-logo-escura.png' }}" alt="{{ empresa_nome or 'vetorIA' }}" class="logo logo-light">
+        <img src="{{ (logo_urls and logo_urls.dark) or logo_url or '/static/vetor-logo-clara.png' }}" alt="{{ empresa_nome or 'vetorIA' }}" class="logo logo-dark">
+      </a>
+    </header>
+    {% endif %}
     {% block topbar %}
       {% block topbar_slot %}{% endblock %}
     {% endblock %}
