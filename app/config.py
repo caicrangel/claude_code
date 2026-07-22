@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+psycopg2://fuel:fuel@db:5432/fuel"
     SECRET_KEY: str = "change-me"
 
+    # Sessão expira após X minutos sem nenhuma requisição (0 = nunca).
+    # A aba aberta conta como atividade (auto-refresh do dashboard).
+    SESSION_TIMEOUT_MIN: int = 30
+
     # Login do painel
     AUTH_EMAIL: str = "admin@empresa.com.br"
     AUTH_PASSWORD: str = "trocar123"

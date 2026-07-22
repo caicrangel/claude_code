@@ -1,10 +1,13 @@
 """Autenticação via banco. Senhas com bcrypt (passlib)."""
 from __future__ import annotations
 
+import time
+
 from fastapi import Depends, HTTPException, Request
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .database import get_db
 from .models import Usuario
 
@@ -35,9 +38,27 @@ def autenticar(db: Session, email: str, senha: str) -> Usuario | None:
     return user
 
 
+def _sessao_expirada(request: Request) -> bool:
+    """Timeout por inatividade (janela deslizante): cada requisição
+    autenticada renova o prazo. Sem requisições por SESSION_TIMEOUT_MIN
+    minutos → sessão morre no servidor, mesmo que o cookie ainda exista."""
+    timeout = settings.SESSION_TIMEOUT_MIN * 60
+    if timeout <= 0:
+        return False
+    agora = int(time.time())
+    visto = request.session.get("last_seen")
+    if visto is not None and agora - int(visto) > timeout:
+        return True
+    request.session["last_seen"] = agora
+    return False
+
+
 def current_user(request: Request, db: Session = Depends(get_db)) -> Usuario | None:
     uid = request.session.get("user_id")
     if not uid:
+        return None
+    if _sessao_expirada(request):
+        request.session.clear()
         return None
     user = db.get(Usuario, uid)
     if user is None or not user.ativo:

@@ -45,7 +45,11 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 app = FastAPI(title=f"Cota Diesel - {settings.EMPRESA_NOME}")
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, https_only=False)
+# max_age=None → cookie de sessão do navegador: fechar o navegador descarta
+# a sessão. O timeout por inatividade (auth._sessao_expirada) cobre o caso de
+# aba fechada com navegador aberto.
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY,
+                   https_only=False, max_age=None)
 
 
 @app.middleware("http")
