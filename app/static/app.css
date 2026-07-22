@@ -379,6 +379,20 @@ td.acoes form:last-child { margin-right: 0; }
 }
 .btn-mini:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; filter: none; }
 
+/* === Menu "⋯" de ações por linha === */
+.menu-acoes { display: inline-block; }
+.menu-acoes .menu-btn { font-size: 1rem; line-height: 1; padding: 0.25rem 0.7rem; font-weight: 800; }
+.menu-acoes.is-open .menu-btn { border-color: var(--accent); color: var(--accent); }
+.menu-panel {
+  display: none; position: fixed; z-index: 80;
+  flex-direction: column; gap: 5px; min-width: 208px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); padding: 7px;
+}
+.menu-acoes.is-open .menu-panel { display: flex; }
+.menu-panel form { display: block; margin: 0; }
+.menu-panel .btn-mini { display: block; width: 100%; text-align: left; padding: 0.45rem 0.6rem; }
+
 /* === Forms grid (configuração) === */
 .grid {
   display: grid; gap: 0.9rem; grid-template-columns: repeat(2, 1fr); margin: 0.6rem 0 1rem;
@@ -533,6 +547,13 @@ td.acoes form:last-child { margin-right: 0; }
   table.table-cards td.acoes form { display: block; margin: 0 0 0.4rem; }
   table.table-cards td.acoes form:last-child { margin-bottom: 0; }
   table.table-cards td.acoes .btn-mini { display: block; width: 100%; text-align: center; padding: 0.5rem; }
+  /* No cartão as ações ficam abertas — sem menu "⋯" */
+  table.table-cards td.acoes .menu-acoes { display: block; }
+  table.table-cards td.acoes .menu-btn { display: none; }
+  table.table-cards td.acoes .menu-panel {
+    display: flex; position: static; min-width: 0;
+    border: 0; box-shadow: none; background: transparent; padding: 0;
+  }
   table.table-cards td.center { justify-content: space-between; }
   table.table-cards .status-tags { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
   /* Linha "sem dados" ocupa o cartão inteiro */

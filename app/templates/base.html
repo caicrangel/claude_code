@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/app.css?v=24">
+  <link rel="stylesheet" href="/static/app.css?v=25">
   <script>
     // tema e recolhimento da sidebar aplicados antes da pintura para evitar flash
     (function(){
@@ -61,6 +61,31 @@
       if (e.target.closest && e.target.closest('.side-nav a, .side-foot a')) closeNav();
     });
     document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeNav(); });
+    // Menu "⋯" de ações por linha. O painel usa position:fixed calculado
+    // aqui — assim nunca é cortado pelo overflow da tabela.
+    function closeMenus(){
+      document.querySelectorAll('.menu-acoes.is-open').forEach(function(m){ m.classList.remove('is-open'); });
+    }
+    function toggleMenu(btn){
+      var wrap = btn.closest('.menu-acoes');
+      var estavaAberto = wrap.classList.contains('is-open');
+      closeMenus();
+      if (estavaAberto) return;
+      wrap.classList.add('is-open');
+      var panel = wrap.querySelector('.menu-panel');
+      var r = btn.getBoundingClientRect();
+      var top = r.bottom + 6;
+      if (top + panel.offsetHeight > window.innerHeight - 8) top = r.top - panel.offsetHeight - 6;
+      var left = Math.min(r.right - panel.offsetWidth, window.innerWidth - panel.offsetWidth - 8);
+      panel.style.top = Math.max(8, top) + 'px';
+      panel.style.left = Math.max(8, left) + 'px';
+    }
+    document.addEventListener('click', function(e){
+      if (!e.target.closest || !e.target.closest('.menu-acoes')) closeMenus();
+    });
+    window.addEventListener('scroll', closeMenus, true);
+    window.addEventListener('resize', closeMenus);
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeMenus(); });
   </script>
   <script src="https://unpkg.com/htmx.org@2.0.3"></script>
   {% block head %}{% endblock %}

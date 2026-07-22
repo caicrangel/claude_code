@@ -137,25 +137,33 @@
               </div>
             </td>
             <td class="acoes" data-label="Ações">
-              {% if not n.cancelada %}
-                <form method="post" action="/notas/{{ n.id }}/toggle-cota" style="display:inline"
-                      onsubmit="return confirm({% if n.excluida_cota %}'Incluir esta NF de volta no cálculo da cota?\n\n{{ n.litros_diesel|litros }} serão SOMADOS ao consumo.'{% else %}'Excluir esta NF do cálculo da cota?\n\nNatureza: {{ n.natureza_operacao or '—' }}\nLitros: {{ n.litros_diesel|litros }}\n\nA NF continua no histórico, apenas não conta no consumo.'{% endif %});">
-                  <button type="submit" class="btn-mini">
-                    {% if n.excluida_cota %}↩ incluir na cota{% else %}✕ excluir da cota{% endif %}
-                  </button>
-                </form>
-                {% if n.id in incluidas_ids %}
-                <form method="post" action="/notas/{{ n.id }}/fixar-periodo" style="display:inline"
-                      onsubmit="return confirm('Remover esta NF deste período?\n\nEla deixa de compor a cota deste período, mas continua no período natural da data de emissão ({{ n.data_emissao|data_curta }}).');">
-                  <button type="submit" class="btn-mini" title="Remover deste período">📌 remover deste período</button>
-                </form>
-                {% endif %}
-              {% endif %}
-              {% if is_admin %}
-              <form method="post" action="/notas/{{ n.id }}/excluir" style="display:inline"
-                    onsubmit="return confirm('ATENÇÃO: excluir DEFINITIVAMENTE esta NF do sistema?\n\nEmitente: {{ n.emitente_nome }}\nLitros: {{ n.litros_diesel|litros }}\nValor: {{ n.valor_total|moeda }}\n\nUse só em caso de inserção por engano. Esta ação NÃO pode ser desfeita.');">
-                <button type="submit" class="btn-mini btn-danger" title="Excluir NF do sistema">✕ excluir do banco</button>
-              </form>
+              {% if not n.cancelada or is_admin %}
+              <div class="menu-acoes">
+                <button type="button" class="btn-mini menu-btn" onclick="toggleMenu(this)"
+                        title="Ações da NF" aria-label="Ações da NF">⋯</button>
+                <div class="menu-panel">
+                  {% if not n.cancelada %}
+                    <form method="post" action="/notas/{{ n.id }}/toggle-cota"
+                          onsubmit="return confirm({% if n.excluida_cota %}'Incluir esta NF de volta no cálculo da cota?\n\n{{ n.litros_diesel|litros }} serão SOMADOS ao consumo.'{% else %}'Excluir esta NF do cálculo da cota?\n\nNatureza: {{ n.natureza_operacao or '—' }}\nLitros: {{ n.litros_diesel|litros }}\n\nA NF continua no histórico, apenas não conta no consumo.'{% endif %});">
+                      <button type="submit" class="btn-mini">
+                        {% if n.excluida_cota %}↩ incluir na cota{% else %}✕ excluir da cota{% endif %}
+                      </button>
+                    </form>
+                    {% if n.id in incluidas_ids %}
+                    <form method="post" action="/notas/{{ n.id }}/fixar-periodo"
+                          onsubmit="return confirm('Remover esta NF deste período?\n\nEla deixa de compor a cota deste período, mas continua no período natural da data de emissão ({{ n.data_emissao|data_curta }}).');">
+                      <button type="submit" class="btn-mini" title="Remover deste período">📌 remover deste período</button>
+                    </form>
+                    {% endif %}
+                  {% endif %}
+                  {% if is_admin %}
+                  <form method="post" action="/notas/{{ n.id }}/excluir"
+                        onsubmit="return confirm('ATENÇÃO: excluir DEFINITIVAMENTE esta NF do sistema?\n\nEmitente: {{ n.emitente_nome }}\nLitros: {{ n.litros_diesel|litros }}\nValor: {{ n.valor_total|moeda }}\n\nUse só em caso de inserção por engano. Esta ação NÃO pode ser desfeita.');">
+                    <button type="submit" class="btn-mini btn-danger" title="Excluir NF do sistema">✕ excluir do banco</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </div>
               {% endif %}
             </td>
           </tr>
