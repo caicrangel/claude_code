@@ -128,7 +128,7 @@ h3 { font-weight: 700; }
 
 /* === Topbar slot (sem tarja — apenas o conteúdo, ex.: chip de período) === */
 .topbar-slot {
-  display: flex; align-items: center; gap: 0.7rem; min-width: 0;
+  display: flex; align-items: center; gap: 0.7rem; min-width: 0; flex-wrap: wrap;
   padding: 1.4rem 1.9rem 0;
 }
 .theme-toggle {
@@ -158,6 +158,16 @@ main { padding: 1.7rem 1.9rem 3rem; flex: 1; }
   font-size: 0.8rem; font-weight: 600; color: var(--text);
 }
 .period-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+/* chip de validade do certificado A1 */
+.cert-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  font-size: 0.8rem; font-weight: 600;
+  background: var(--panel-soft); border: 1px solid var(--border); color: var(--muted);
+}
+.cert-chip.cert-warn { color: var(--warn); border-color: var(--warn); background: rgba(245, 158, 11, 0.10); }
+.cert-chip.cert-crit { color: var(--crit); border-color: var(--crit); background: rgba(239, 68, 68, 0.10); }
 
 /* === Login === */
 body.login-body { display: block; }

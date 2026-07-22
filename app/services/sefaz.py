@@ -113,6 +113,12 @@ def load_pfx(pfx_path: str, password: str) -> tuple[bytes, bytes]:
     return load_pfx_bytes(Path(pfx_path).read_bytes(), password)
 
 
+def pfx_not_valid_after(data: bytes, password: str):
+    """Data de expiração (datetime UTC tz-aware) do certificado no .pfx."""
+    _, cert, _ = pkcs12.load_key_and_certificates(data, password.encode())
+    return cert.not_valid_after_utc
+
+
 def _envelope_dist(uf_cod: str, ambiente: int, cnpj: str, body_inner: str) -> bytes:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">

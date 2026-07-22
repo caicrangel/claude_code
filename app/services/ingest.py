@@ -100,6 +100,27 @@ def get_client(db: Session | None = None) -> SefazClient:
     )
 
 
+def cert_vencimento(db: Session) -> dict | None:
+    """Validade do certificado A1 efetivo (banco de preferência; senão o
+    arquivo do .env). Retorna {'vence_em': datetime UTC, 'dias': int} —
+    'dias' negativo = vencido. None se não há cert legível."""
+    from pathlib import Path
+
+    from .sefaz import pfx_not_valid_after
+    try:
+        cert = runtime_config.get_cert(db)
+        if cert is not None:
+            data, senha = cert
+        else:
+            data = Path(settings.CERT_PATH).read_bytes()
+            senha = settings.CERT_PASSWORD
+        vence = pfx_not_valid_after(data, senha)
+        dias = (vence - datetime.now(timezone.utc)).days
+        return {"vence_em": vence, "dias": dias}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # ---------- throttle e bloqueio ----------
 
 def _segundos_desde(db: Session, key: str) -> int | None:

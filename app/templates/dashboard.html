@@ -4,6 +4,29 @@
     <span class="period-chip"><span class="dot"></span>
       {{ periodo.inicio|data_curta }} → {{ periodo.fim|data_curta }}{% if periodo.nome %} · {{ periodo.nome }}{% endif %}
     </span>
+    {% if cert_venc is not none %}
+      {% if cert_venc.dias < 0 %}
+        <span class="cert-chip cert-crit" title="Certificado digital A1 VENCIDO — as consultas à SEFAZ vão falhar até a renovação">
+          🔒 Certificado VENCIDO em {{ cert_venc.vence_em|data_curta }}
+        </span>
+      {% elif cert_venc.dias <= 10 %}
+        <span class="cert-chip cert-crit" title="Renove o certificado digital A1 com urgência — após o vencimento as consultas à SEFAZ param">
+          🔒 Certificado vence em {{ cert_venc.dias }} dia{{ 's' if cert_venc.dias != 1 else '' }} ({{ cert_venc.vence_em|data_curta }})
+        </span>
+      {% elif cert_venc.dias <= 30 %}
+        <span class="cert-chip cert-warn" title="Programe a renovação do certificado digital A1">
+          🔒 Certificado vence em {{ cert_venc.dias }} dias ({{ cert_venc.vence_em|data_curta }})
+        </span>
+      {% else %}
+        <span class="cert-chip cert-ok" title="Validade do certificado digital A1 usado nas consultas à SEFAZ">
+          🔒 Certificado válido até {{ cert_venc.vence_em|data_curta }}
+        </span>
+      {% endif %}
+    {% else %}
+      <span class="cert-chip cert-warn" title="Nenhum certificado A1 legível — configure em Configuração → Parâmetros">
+        🔒 Certificado não configurado
+      </span>
+    {% endif %}
   </div>
 {% endblock %}
 {% block content %}

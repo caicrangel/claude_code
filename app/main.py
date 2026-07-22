@@ -29,6 +29,7 @@ from .services import periodo as periodo_svc
 from .services.ingest import (
     TooSoonError,
     UploadInvalido,
+    cert_vencimento,
     importar_xml_manual,
     processar,
     status_bloqueio_656,
@@ -199,12 +200,13 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     upload_erro = request.query_params.get("upload_erro")
     sync_ok = request.query_params.get("sync_ok")
     sync_erro = request.query_params.get("sync_erro")
+    cert_venc = cert_vencimento(db)
     return render("dashboard.html", request, db, **k,
                   notas=notas, total_notas=total_notas, now=fmt.now_local(),
                   bloqueio_sefaz=bloqueio, ultima_sync=ultima_sync,
                   poll_label=poll_label, incluidas_ids=incluidas_ids,
                   upload_ok=upload_ok, upload_erro=upload_erro,
-                  sync_ok=sync_ok, sync_erro=sync_erro)
+                  sync_ok=sync_ok, sync_erro=sync_erro, cert_venc=cert_venc)
 
 
 def _parse_date(v: str | None, default: date) -> date:
@@ -376,6 +378,7 @@ def config_get(request: Request, db: Session = Depends(get_db)):
         emails_alerta=db.query(EmailAlerta).order_by(EmailAlerta.email).all(),
         params=runtime_config.snapshot_safe(db),
         cert_info=runtime_config.get_cert_info(db),
+        cert_venc=cert_vencimento(db),
         msg=request.query_params.get("msg"),
         erro=request.query_params.get("erro"),
     )
