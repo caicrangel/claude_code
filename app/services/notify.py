@@ -285,6 +285,67 @@ def _acumulado_mes(db: Session, ref, periodo=None) -> dict:
     }
 
 
+def _barra_pct(pct: float, blocos: int = 10) -> str:
+    """Barra de progresso textual pro Telegram: ▰▰▰▱▱▱▱▱▱▱"""
+    cheios = min(blocos, max(0, round(pct / 100 * blocos)))
+    return "▰" * cheios + "▱" * (blocos - cheios)
+
+
+def _tg_nfs_novas(empresa: str, nfs: list[NotaFiscal],
+                  resumo_cota: dict, acu: dict) -> str:
+    """Mensagem Telegram do alerta de NF nova: blocos verticais curtos
+    (bom em tela estreita), barra de uso da cota e acumulado do mês em
+    2 linhas por NF, com separadores."""
+    pct = float(resumo_cota.get("pct") or 0)
+    consumo = Decimal(str(resumo_cota.get("consumo") or 0))
+    restante = Decimal(str(resumo_cota.get("restante") or 0))
+    sep = "─" * 18
+
+    # --- NFs novas (o motivo do alerta) ---
+    blocos_nf = []
+    for nf in nfs[:10]:
+        quando = fmt_data(nf.data_emissao) if nf.data_emissao else "—"
+        preco = ((Decimal(nf.valor_total or 0) / Decimal(nf.litros_diesel))
+                 if nf.litros_diesel else Decimal(0))
+        blocos_nf.append(
+            f"📄 <b>NF {escape(nf.numero or '—')}</b> · {escape(quando)}\n"
+            f"🏭 {escape((nf.emitente_nome or '—')[:34])}\n"
+            f"⛽ <b>{escape(fmt_litros(nf.litros_diesel or 0))}</b> · "
+            f"{escape(fmt_moeda(nf.valor_total or 0))} · "
+            f"{escape(fmt_moeda(preco))}/L"
+        )
+    extra_nf = f"\n… e mais {len(nfs) - 10} NF" if len(nfs) > 10 else ""
+
+    # --- Acumulado do mês, nota a nota (2 linhas por NF) ---
+    linhas_acu = []
+    for n in acu["notas"][:20]:
+        dia = (fmt_data_curta(n["data"])[:5] if n["data"] else "—")  # dd/mm
+        linhas_acu.append(
+            f"{escape(dia)} · NF {escape(n['numero'])} · {escape(n['nome'][:24])}\n"
+            f"      ⛽ {escape(fmt_litros(n['litros']))} · "
+            f"{escape(fmt_moeda(n['preco']))}/L"
+        )
+    extra_acu = (f"\n… e mais {len(acu['notas']) - 20} NF"
+                 if len(acu["notas"]) > 20 else "")
+
+    return (
+        f"🆕 <b>{escape(empresa)}</b>\n"
+        f"{len(nfs)} nova{'s' if len(nfs) > 1 else ''} NF de diesel\n\n"
+        + "\n\n".join(blocos_nf) + extra_nf + "\n\n"
+        f"📊 <b>Uso da cota: {escape(fmt_pct(pct))}</b>\n"
+        f"{_barra_pct(pct)}\n"
+        f"Consumido {escape(fmt_litros(consumo))}\n"
+        f"Restante {escape(fmt_litros(restante))}\n\n"
+        f"📆 <b>Acumulado de {escape(acu['mes'])}</b> · {acu['total_notas']} NF\n"
+        f"{sep}\n"
+        + "\n".join(linhas_acu) + extra_acu + "\n"
+        f"{sep}\n"
+        f"Σ <b>TOTAL: {escape(fmt_litros(acu['total_litros']))}</b>\n"
+        f"💰 {escape(fmt_moeda(acu['total_valor']))} · "
+        f"média <b>{escape(fmt_moeda(acu['preco']))}/L</b>"
+    )
+
+
 def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
                         *, via_email: bool = True, via_telegram: bool = True) -> int:
     """Envia 1 e-mail/telegram com as NFs informadas. Retorna nº de e-mails OK.
@@ -304,31 +365,8 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     acu = _acumulado_mes(db, ref, get_periodo_ativo(db))
 
     if via_telegram:
-        tg_linhas = "\n".join(
-            f"• {escape(fmt_data(nf.data_emissao) if nf.data_emissao else '—')} "
-            f"NF {escape(nf.numero or '—')} — <b>{escape((nf.emitente_nome or '—')[:40])}</b> "
-            f"— {escape(fmt_litros(nf.litros_diesel or 0))}"
-            for nf in nfs[:15]
-        )
-        tg_text = (
-            f"🆕 <b>{escape(empresa)}</b>\n"
-            f"{len(nfs)} NF de diesel — total {escape(fmt_litros(total_litros))}\n"
-            f"Consumo acumulado: <b>{escape(fmt_pct(pct))}</b> da cota\n\n{tg_linhas}"
-            + ("\n…" if len(nfs) > 15 else "")
-            + f"\n\n📆 <b>Compras de {escape(acu['mes'])} (nota a nota)</b>\n"
-            + "\n".join(
-                f"• {escape(fmt_data_curta(n['data']) if n['data'] else '—')} "
-                f"NF {escape(n['numero'])} {escape(n['nome'][:26])}: "
-                f"{escape(fmt_litros(n['litros']))} · {escape(fmt_moeda(n['valor']))} · "
-                f"{escape(fmt_moeda(n['preco']))}/L"
-                for n in acu["notas"][:20]
-            )
-            + ("\n…" if len(acu["notas"]) > 20 else "")
-            + f"\n<b>TOTAL: {escape(fmt_litros(acu['total_litros']))} · "
-            + f"{escape(fmt_moeda(acu['total_valor']))} · "
-            + f"{escape(fmt_moeda(acu['preco']))}/L</b>"
-        )
-        telegram.send_message(tg_text, db=db)
+        telegram.send_message(
+            _tg_nfs_novas(empresa, nfs, resumo_cota, acu), db=db)
 
     destinatarios = _destinatarios_ativos(db) if via_email else []
     if not destinatarios:
