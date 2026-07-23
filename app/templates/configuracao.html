@@ -327,6 +327,33 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <h2>Histórico de envios (últimos 40)</h2>
+    <p class="muted">Cada tentativa de envio de alerta fica registrada aqui — e-mail e Telegram,
+       automáticos e manuais. Falhas mostram o motivo do erro; e-mails têm 3 tentativas
+       automáticas antes de constar como falha.</p>
+    <table>
+      <thead><tr><th>Quando</th><th>Canal</th><th>Destinatário</th><th>Assunto / mensagem</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for env in envios %}
+          <tr>
+            <td style="white-space:nowrap;">{{ env.criado_em|data }}</td>
+            <td>{% if env.canal == 'email' %}📧 e-mail{% else %}✈️ telegram{% endif %}</td>
+            <td>{{ env.destinatario or '—' }}</td>
+            <td class="muted">{{ (env.assunto or '—')[:80] }}</td>
+            <td>
+              {% if env.ok %}<span class="tag tag-ok">enviado</span>
+              {% else %}<span class="tag tag-crit" title="{{ env.erro or 'erro desconhecido' }}">falhou</span>{% endif %}
+            </td>
+          </tr>
+          {% if not env.ok and env.erro %}
+          <tr><td colspan="5" class="muted" style="font-size:0.78rem;padding-top:0;">↳ {{ env.erro[:220] }}</td></tr>
+          {% endif %}
+        {% else %}
+          <tr><td colspan="5" class="muted">Nenhum envio registrado ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </section>
 
   <!-- Aba: Usuários -->

@@ -65,14 +65,20 @@ def send_message(text: str, *, db: Session | None = None,
     }
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    from .email import registrar_envio
+    resumo = text.split("\n", 1)[0][:200]
     try:
         r = requests.post(f"{API}/bot{cfg['token']}/sendMessage",
                           json=payload, timeout=20)
         if not r.ok:
             log.warning("Telegram sendMessage falhou: %s %s", r.status_code, r.text[:300])
+        registrar_envio("telegram", cfg["chat_id"], resumo, ok=r.ok,
+                        erro="" if r.ok else f"HTTP {r.status_code}: {r.text[:300]}")
         return r.ok
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         log.exception("Erro enviando mensagem Telegram")
+        registrar_envio("telegram", cfg["chat_id"], resumo, ok=False,
+                        erro=f"{type(e).__name__}: {e}")
         return False
 
 

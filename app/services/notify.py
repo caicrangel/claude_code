@@ -340,12 +340,27 @@ def notificar_nfs_novas(db: Session, nfs: list[NotaFiscal], resumo_cota: dict,
     html = _html_nfs_novas(empresa, cnpj, nfs, resumo_cota, bloco_logo(logo_src), acu)
     inline = [logo_img] if logo_img else None
     enviados = 0
+    falharam = []
     for dest in destinatarios:
         if send_email(to=dest, subject=subject, body=text, html_body=html,
                       inline_images=inline, db=db):
             enviados += 1
+        else:
+            falharam.append(dest)
     log.info("Notificação de NFs novas: %d NFs → %d/%d destinatários OK",
              len(nfs), enviados, len(destinatarios))
+    if falharam:
+        # "Alarme do alarme": e-mail é o canal principal da diretoria — se
+        # falhou mesmo após retries, avisa no Telegram pra alguém reenviar
+        # manualmente (Configuração → Central de disparos).
+        telegram.send_message(
+            "⚠️ <b>Falha no envio de E-MAIL do alerta de NF</b>\n"
+            f"{enviados}/{len(destinatarios)} destinatário(s) receberam. Falhou para: "
+            f"{escape(', '.join(falharam))}\n"
+            "Verifique o SMTP em Configuração e reenvie pela Central de disparos. "
+            "Detalhe do erro no histórico de envios.",
+            db=db,
+        )
     return enviados
 
 

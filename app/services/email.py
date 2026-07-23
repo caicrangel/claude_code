@@ -1,5 +1,6 @@
 import logging
 import smtplib
+import time
 from email.message import EmailMessage
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,27 @@ from ..config import settings
 from ..database import SessionLocal
 
 log = logging.getLogger(__name__)
+
+TENTATIVAS = 3          # total de tentativas de envio SMTP
+ESPERA_RETRY_SEG = 5    # espera entre tentativas
+
+
+def registrar_envio(canal: str, destinatario: str, assunto: str,
+                    ok: bool, erro: str = "") -> None:
+    """Grava a tentativa no histórico (tabela log_envio). Sessão própria e
+    curta — nunca interfere na transação de quem chamou; falha aqui só loga."""
+    from ..models import LogEnvio
+    try:
+        db = SessionLocal()
+        try:
+            db.add(LogEnvio(canal=canal, destinatario=(destinatario or "")[:255],
+                            assunto=(assunto or "")[:255], ok=ok,
+                            erro=(erro or "")[:2000]))
+            db.commit()
+        finally:
+            db.close()
+    except Exception:  # noqa: BLE001
+        log.exception("Falha registrando envio no histórico")
 
 Attachment = tuple[str, bytes, str]  # (filename, content, mimetype "type/subtype")
 InlineImage = tuple[str, bytes, str]  # (cid, content, mimetype) — referenciado no HTML por cid:<cid>
@@ -60,6 +82,8 @@ def send_email(
 
     if not cfg["host"] or not to:
         log.warning("SMTP não configurado ou destinatário vazio - email ignorado")
+        registrar_envio("email", to, subject, ok=False,
+                        erro="SMTP não configurado ou destinatário vazio")
         return False
 
     msg = EmailMessage()
@@ -82,14 +106,24 @@ def send_email(
         maintype, _, subtype = mimetype.partition("/")
         msg.add_attachment(content, maintype=maintype or "application",
                            subtype=subtype or "octet-stream", filename=filename)
-    try:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as s:
-            if cfg["tls"]:
-                s.starttls()
-            if cfg["user"]:
-                s.login(cfg["user"], cfg["password"])
-            s.send_message(msg)
-        return True
-    except Exception as e:  # noqa: BLE001
-        log.exception("Falha enviando email: %s", e)
-        return False
+    ultimo_erro = ""
+    for tentativa in range(1, TENTATIVAS + 1):
+        try:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as s:
+                if cfg["tls"]:
+                    s.starttls()
+                if cfg["user"]:
+                    s.login(cfg["user"], cfg["password"])
+                s.send_message(msg)
+            registrar_envio("email", to, subject, ok=True)
+            return True
+        except Exception as e:  # noqa: BLE001
+            ultimo_erro = f"{type(e).__name__}: {e}"
+            log.warning("Falha enviando email (tentativa %d/%d): %s",
+                        tentativa, TENTATIVAS, ultimo_erro)
+            if tentativa < TENTATIVAS:
+                time.sleep(ESPERA_RETRY_SEG)
+    log.error("Email para %s NÃO enviado após %d tentativas: %s",
+              to, TENTATIVAS, ultimo_erro)
+    registrar_envio("email", to, subject, ok=False, erro=ultimo_erro)
+    return False

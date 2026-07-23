@@ -89,6 +89,20 @@ class Alerta(Base):
     )
 
 
+class LogEnvio(Base):
+    """Registro de cada tentativa de envio de alerta (e-mail/telegram).
+    Dá visibilidade na UI: o que saiu, pra quem, e o erro quando falhou."""
+    __tablename__ = "log_envio"
+
+    id = Column(Integer, primary_key=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, index=True)
+    canal = Column(String(16), nullable=False)          # email | telegram
+    destinatario = Column(String(255), default="")
+    assunto = Column(String(255), default="")
+    ok = Column(Boolean, nullable=False, default=False)
+    erro = Column(Text, default="")
+
+
 class State(Base):
     """Tabela chave/valor para estado interno (ex.: ultimo_nsu)."""
     __tablename__ = "state"

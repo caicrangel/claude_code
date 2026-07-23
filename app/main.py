@@ -24,7 +24,9 @@ from .auth import (
 )
 from .config import settings
 from .database import get_db, run_migrations
-from .models import CotaPeriodo, EmailAlerta, NotaFiscal, Usuario, get_state, set_state
+from .models import (
+    CotaPeriodo, EmailAlerta, LogEnvio, NotaFiscal, Usuario, get_state, set_state,
+)
 from .services import periodo as periodo_svc
 from .services.ingest import (
     TooSoonError,
@@ -379,6 +381,7 @@ def config_get(request: Request, db: Session = Depends(get_db)):
         params=runtime_config.snapshot_safe(db),
         cert_info=runtime_config.get_cert_info(db),
         cert_venc=cert_vencimento(db),
+        envios=db.query(LogEnvio).order_by(LogEnvio.criado_em.desc()).limit(40).all(),
         msg=request.query_params.get("msg"),
         erro=request.query_params.get("erro"),
     )
