@@ -667,6 +667,11 @@ def config_disparar(
     if tipo == "situacao":
         r = enviar_situacao_cota(db, via_email=via_email, via_telegram=via_tg)
         if r.get("ok"):
+            if via_email and not r.get("email_ok"):
+                return _config_redirect(
+                    request,
+                    erro=("Situacao: NENHUM e-mail foi entregue "
+                          f"(telegram={r.get('telegram')}). Veja o Histórico de envios."))
             return _config_redirect(
                 request,
                 msg=f"Situacao enviada (email={r['email_ok']}, telegram={r['telegram']})")
@@ -718,6 +723,12 @@ def config_disparar_nfs(
     resumo = {"consumo": float(consumo), "cota": float(cota),
               "pct": pct, "restante": float(cota - consumo)}
     n = notificar_nfs_novas(db, nfs, resumo, via_email=via_email, via_telegram=via_tg)
+    if via_email and n == 0:
+        return _config_redirect(
+            request,
+            erro=(f"Alerta de {len(nfs)} NF(s): NENHUM e-mail foi entregue. "
+                  "Veja o motivo em E-mails de alerta → Histórico de envios "
+                  "e confira o SMTP em Parâmetros."))
     return _config_redirect(request, msg=f"Alerta de {len(nfs)} NF(s) enviado (email={n})")
 
 
